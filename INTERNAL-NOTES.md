@@ -7,3 +7,4 @@ Day 2 recap:
 - built the PDF extractor script and installed the tools so we can pull text + diagrams
 - ran it on a fresh sample to check outputs, then on the whole dataset
 - spotted which papers failed (we’ll skip dodgy MA files and fix image colour handling next)
+- re-ran extraction on 2025-10-14 with new image handling; logs show `ok=1141 warn=0 error=0` (MA PDFs skipped)

@@ -42,3 +42,7 @@ This table tracks the past-paper PDFs and mark schemes stored under `data/pdfs/`
 - Do not sync `data/pdfs/` to GitHub; track acquisition steps here instead.
 - When new sets arrive, update this README before running extraction scripts.
 
+## Extraction Status
+
+- 2025-10-14 21:02 local run `logs/extract/run_20251014_204820.log` (`run_20251014_210227.jsonl`): `ok=1141 warn=0 error=0` (model-answer PDFs excluded)
+

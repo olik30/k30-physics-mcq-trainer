@@ -54,6 +54,8 @@ def parse_args() -> argparse.Namespace:
                         help="Overwrite existing outputs instead of skipping")
     parser.add_argument("--include-data-sheets", action="store_true",
                         help="Process files whose names include 'data sheet'")
+    parser.add_argument("--include-ma", action="store_true",
+                        help="Process PDFs whose filename contains standalone 'MA' (model answers)")
     parser.add_argument("--single-file", type=Path, default=None,
                         help="Process just one PDF (overrides directory walk)")
     return parser.parse_args()
@@ -79,13 +81,18 @@ def sanitise_segment(segment: str) -> str:
     return slug.strip("._") or "unnamed"
 
 
-def iter_pdf_files(root: Path, include_data_sheets: bool = False) -> Iterable[Path]:
+def iter_pdf_files(root: Path, include_data_sheets: bool = False, include_ma: bool = False) -> Iterable[Path]:
     if not root.exists():
         raise FileNotFoundError(f"PDF root does not exist: {root}")
     for path in sorted(root.rglob("*.pdf")):
         name_lower = path.name.lower()
         if not include_data_sheets and "data sheet" in name_lower:
             continue
+        if not include_ma:
+            stem = path.stem.lower()
+            if re.search(r"\bma\b", stem):
+                logging.debug("Skipping MA PDF: %s", path)
+                continue
         yield path
 
 
@@ -135,24 +142,26 @@ def export_images(pdf_path: Path, pdf_root: Path, image_root: Path,
                 continue
             for img_index, img in enumerate(images, start=1):
                 xref = img[0]
-                pix = fitz.Pixmap(doc, xref)
-                try:
-                    if pix.alpha:
-                        pix = fitz.Pixmap(fitz.csRGB, pix)
-                    relative = pdf_path.relative_to(pdf_root)
-                    segments = [sanitise_segment(seg) for seg in relative.parts[:-1]]
-                    segments.append(sanitise_segment(pdf_path.stem))
-                    out_path = image_root.joinpath(
-                        *segments,
-                        f"page_{page_index:03d}_img_{img_index:02d}.png",
-                    )
-                    ensure_parents(out_path)
-                    if out_path.exists() and not overwrite:
-                        continue
-                    pix.save(out_path)
-                    image_count += 1
-                finally:
-                    pix = None  # free resources
+                image_info = doc.extract_image(xref)
+                if not image_info:
+                    logging.warning("Could not extract image xref=%s from %s", xref, pdf_path)
+                    continue
+                image_bytes = image_info.get("image")
+                if not image_bytes:
+                    logging.warning("Empty image bytes xref=%s from %s", xref, pdf_path)
+                    continue
+                ext = image_info.get("ext", "png").lower()
+                relative = pdf_path.relative_to(pdf_root)
+                segments = [sanitise_segment(seg) for seg in relative.parts[:-1]]
+                segments.append(sanitise_segment(pdf_path.stem))
+                out_dir = image_root.joinpath(*segments)
+                ensure_parents(out_dir / "placeholder")
+                out_path = out_dir / f"page_{page_index:03d}_img_{img_index:02d}.{ext}"
+                if out_path.exists() and not overwrite:
+                    continue
+                with out_path.open("wb") as fh:
+                    fh.write(image_bytes)
+                image_count += 1
     finally:
         doc.close()
     return image_count
@@ -216,7 +225,11 @@ def main() -> None:
     if args.single_file:
         pdfs = [args.single_file]
     else:
-        pdf_iter = iter_pdf_files(pdf_root, include_data_sheets=args.include_data_sheets)
+        pdf_iter = iter_pdf_files(
+            pdf_root,
+            include_data_sheets=args.include_data_sheets,
+            include_ma=args.include_ma,
+        )
         if args.max_files is None:
             pdfs = list(pdf_iter)
         else:

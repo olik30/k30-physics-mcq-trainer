@@ -104,9 +104,11 @@ def ensure_parents(path: Path) -> None:
 
 
 def export_text(pdf_path: Path, pdf_root: Path, raw_root: Path,
-                overwrite: bool) -> List[Path]:
+                overwrite: bool) -> tuple[list[Path], int, int]:
     outputs: List[Path] = []
+    skipped = 0
     with pdfplumber.open(pdf_path) as pdf:
+        total_pages = len(pdf.pages)
         for page_index, page in enumerate(pdf.pages, start=1):
             text = page.extract_text() or ""
             relative = pdf_path.relative_to(pdf_root)
@@ -115,10 +117,11 @@ def export_text(pdf_path: Path, pdf_root: Path, raw_root: Path,
             out_path = raw_root.joinpath(*segments, f"page_{page_index:03d}.txt")
             ensure_parents(out_path)
             if out_path.exists() and not overwrite:
+                skipped += 1
                 continue
             out_path.write_text(text, encoding="utf-8")
             outputs.append(out_path)
-    return outputs
+    return outputs, total_pages, skipped
 
 
 def export_images(pdf_path: Path, pdf_root: Path, image_root: Path,
@@ -159,18 +162,20 @@ def process_pdf(pdf_path: Path, pdf_root: Path, raw_root: Path,
                 image_root: Path, overwrite: bool) -> ExtractionResult:
     try:
         logging.info("Processing %s", pdf_path)
-        text_outputs = export_text(pdf_path, pdf_root, raw_root, overwrite)
+        text_outputs, total_pages, skipped_pages = export_text(pdf_path, pdf_root, raw_root, overwrite)
         image_count = export_images(pdf_path, pdf_root, image_root, overwrite)
-        pages = len(text_outputs)
         status = "ok"
         msg = ""
-        if pages == 0:
+        if total_pages == 0:
             status = "warn"
-            msg = "No text extracted"
+            msg = "No pages detected"
+        elif skipped_pages and len(text_outputs) == 0 and not overwrite:
+            status = "ok"
+            msg = f"Skipped (already extracted {skipped_pages} pages)"
         return ExtractionResult(
             pdf=str(pdf_path.relative_to(pdf_root)),
-            pages=pages,
-            text_files=len(text_outputs),
+            pages=total_pages,
+            text_files=max(len(text_outputs), total_pages),
             images=image_count,
             status=status,
             message=msg,
@@ -212,8 +217,12 @@ def main() -> None:
         pdfs = [args.single_file]
     else:
         pdf_iter = iter_pdf_files(pdf_root, include_data_sheets=args.include_data_sheets)
-        pdfs = list(pdfs if (limit := args.max_files) is None else
-                    [p for _, p in zip(range(limit), pdf_iter)])
+        if args.max_files is None:
+            pdfs = list(pdf_iter)
+        else:
+            pdfs = []
+            for _, path in zip(range(args.max_files), pdf_iter):
+                pdfs.append(path)
         if not pdfs:
             logging.warning("No PDFs found under %s", pdf_root)
             return

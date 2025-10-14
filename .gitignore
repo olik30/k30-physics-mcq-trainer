@@ -1,3 +1,6 @@
 # Ignore local datasets and large assets
 data/pdfs/
+data/raw/
+data/images/
+logs/extract/
 

@@ -1,0 +1,3 @@
+# Ignore local datasets and large assets
+data/pdfs/
+

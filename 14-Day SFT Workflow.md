@@ -80,6 +80,7 @@ NOTE: MARKDOWN PROGRESS + WHAT'S IMPLEMENENTED + DELIVERABLES WHEN YOU FINISH A 
 - Goal: clean, organized, auditable source files
 
 **Day 2 — Extract text + images (batch + log)**
+- Create `scripts/extract_pdf.py` to iterate over `data/pdfs/`, pull text per page, export images, and emit structured logs/errors.
 - Run `scripts/extract_pdf.py` to extract per-page text and images; store logs in `logs/extract/`
 - Output:
   - `data/raw/<paper>_page<N>.txt`
@@ -88,12 +89,14 @@ NOTE: MARKDOWN PROGRESS + WHAT'S IMPLEMENENTED + DELIVERABLES WHEN YOU FINISH A 
 - Create first git commit (`extract-baseline`) for reproducibility
 
 **Day 3 — OCR, captions & parallel cleanup**
+- Create `scripts/ocr_images.py` to batch OCR stored page images, capture axis/label text, and write tidy JSON captions per asset.
 - Run `scripts/ocr_images.py` to capture labels (axes, units, numbers, component names)
 - Save JSON captions to `data/captions/<image>.json`
 - While OCR runs, start cleaning noisy text (headers, watermarks) and log fixes in `logs/cleanup/`
 - Update coverage table with OCR status
 
 **Day 4 — Parse questions, align mark schemes & seed retrieval**
+- Create `scripts/parse_questions.py` to combine raw text, captions, and mark schemes into structured question objects with metadata links.
 - Run `scripts/parse_questions.py` to detect questions, sections, marks
 - Match each to mark scheme answers; log ambiguities for manual review
 - Link images by page number and keywords (“Figure 1”)
@@ -101,26 +104,32 @@ NOTE: MARKDOWN PROGRESS + WHAT'S IMPLEMENENTED + DELIVERABLES WHEN YOU FINISH A 
 - Output: `data/parsed/questions.jsonl` with fields including metadata `{status:'pending', reviewer?:string}`
 
 **Day 5 — Create first training examples + review lane**
+- Create `scripts/make_seed_data.py` to help curate MCQ JSON by merging parsed questions with mark-scheme context and enforcing the schema.
 - Curate ~120 balanced questions into clean MCQ JSON (options, correct_index, hint, explanation, AO)
 - Use mark scheme, image_context, and retrieved snippets
+- Create `scripts/review_seed.py` to provide a lightweight approval UI/CLI that writes reviewer decisions and notes to disk.
 - Build lightweight review UI (`scripts/review_seed.py`, Streamlit/Gradio/CLI) for approvals and notes saved in `data/review/seed_notes.jsonl`
 - Save approved items to `data/parsed/seed_train.jsonl` and update coverage tracker
 
 **Day 6 — Expand with local model help + human triage**
+- Create `scripts/auto_generate.py` to call the local model with mark-scheme snippets and produce draft MCQs tagged with provenance.
 - Use local model (Ollama Qwen2.5-7B-Instruct or Llama-3.1-8B) via `scripts/auto_generate.py`
 - Prompt with mark scheme snippets, image_context, retrieval results
 - Route outputs through the same review UI for accept/reject tagging (store rejected reasons)
 - Save accepted items to `data/parsed/auto_train_candidates.jsonl` with status metadata
 
 **Day 7 — Filter, unit-test & balance**
+- Create `scripts/filter_balance.py` with CLI flags to validate JSON records, enforce AO/topic balance, and deduplicate by embeddings.
 - Implement `scripts/filter_balance.py` checks:
   - Valid JSON, 4 unique options, correct_index 0–3
   - No meta options, length limits, unit/significant-figure consistency
+- Create `tests/test_filters.py` to cover schema violations, duplicate detection, AO gaps, and sig-fig/unit edge cases.
 - Add Pytest suite `tests/test_filters.py` covering duplicates, AO gaps, sig-fig errors; run daily
 - Deduplicate via sentence-transformer cosine similarity; enforce AO/topic balance using coverage tracker
 - Output: `data/parsed/train_clean.jsonl` (~2–4k items)
 
 **Day 8 — Format, validate & snapshot**
+- Create `scripts/format_for_sft.py` to convert validated MCQs into chat-completion format and run JSON schema checks during export.
 - Use `scripts/format_for_sft.py` to create chat format (system/user/assistant)
 - Run jsonschema validation on formatted files; fail fast on malformed records
 - Split into train/val/test (80/10/10) and record dataset stats in `results/dataset_stats.json`
@@ -128,11 +137,13 @@ NOTE: MARKDOWN PROGRESS + WHAT'S IMPLEMENENTED + DELIVERABLES WHEN YOU FINISH A 
 - Output: `data/formatted/train.jsonl`, `val.jsonl`, `test.jsonl`
 
 **Day 9 — Fine-tune locally (LoRA) + log metrics**
+- Create `scripts/train_lora.py` to launch LoRA fine-tuning with configurable hyperparameters and structured logging.
 - Train with `scripts/train_lora.py` (LoRA rank 16–32, bf16/fp16, lr ~2e-4, gradient checkpointing if needed)
 - Log training metrics to `logs/train/adapter_v1.jsonl`
 - Save adapter to `models/adapters/adapter_v1/` and update `config/adapters.yaml` (`adapter_v1: status=staging`)
 
 **Day 10 — Evaluate, benchmark & log**
+- Create `scripts/eval.py` to load adapters, run validation splits, compute core metrics, and emit sample outputs for review.
 - Run `scripts/eval.py` on `test.jsonl`
 - Capture metrics: JSON validity %, answer accuracy, distractor diversity, numeric tolerance, AO distribution, hint quality flags
 - Save to `results/adapter_v1/metrics.json` and `results/adapter_v1/samples.jsonl`
@@ -146,13 +157,16 @@ NOTE: MARKDOWN PROGRESS + WHAT'S IMPLEMENENTED + DELIVERABLES WHEN YOU FINISH A 
 - Keep original seed set as high-quality reference
 
 **Day 12 — Second fine-tune + adapter management**
+- Create `scripts/train_lora.py` updates (if needed) or add config hooks to support multiple adapters cleanly.
 - Train new adapter `models/adapters/adapter_v2/`
 - Update `config/adapters.yaml` with metrics (statuses: staging/prod/archive)
 - Evaluate both adapters; compare results in `results/adapter_comparison.md`
 - Promote higher-performing adapter to `status=prod`
 
 **Day 13 — Serve, integrate & regression test**
+- Create `scripts/serve_model.py` to expose the trained adapter over HTTP with health checks and latency logging.
 - Serve adapter locally with `scripts/serve_model.py`; add health check and latency logging
+- Create `scripts/regression_suite.py` to replay archived questions against both Azure and local paths and compare structured outputs.
 - Update `netlify/functions/decode.ts` to call the local endpoint while retaining validators
 - Run regression suite (`scripts/regression_suite.py`) over 20–30 archived questions; compare against Azure outputs and log diffs in `results/integration_tests.md`
 - Maintain temporary Azure fallback until local path proves stable

@@ -77,29 +77,33 @@ NOTE: MARKDOWN PROGRESS + WHAT'S IMPLEMENENTED + DELIVERABLES WHEN YOU FINISH A 
 - Keep filenames consistent (e.g., `AQA_2019_P1.pdf`, `AQA_2019_P1_MS.pdf`)
 - Create `data/README.md` with coverage table (board, year, topic, marks) to track gaps
 - If material is sensitive, store `data/` on encrypted storage (BitLocker) and document handling rules
+- Initialise Git LFS and track `data/` + `logs/` so large binaries stay out of normal git history; record commands in `INTERNAL-NOTES.md`
 - Goal: clean, organized, auditable source files
 
 **Day 2 — Extract text + images (batch + log)**
 - Create `scripts/extract_pdf.py` to iterate over `data/pdfs/`, pull text per page, export images, and emit structured logs/errors.
-- Run `scripts/extract_pdf.py` to extract per-page text and images; store logs in `logs/extract/`
+- Remove stale `data/raw/` + `data/images/` before a rerun so new outputs reflect the latest heuristics (high-DPI vector clips, raster filters).
+- Run `scripts/extract_pdf.py` (tune with flags like `--render-dpi`, `--min-raster-contrast`, `--drawing-cluster-gap`) to extract per-page text and targeted image crops; store logs in `logs/extract/`.
 - Output:
   - `data/raw/<paper>_page<N>.txt`
-  - `data/images/<paper>_page<N>_img<M>.png`
-- Note PDFs with extraction issues in `data/README.md`
+  - `data/images/<paper>_page<N>_img<M>.png` and `..._vector_<K>.png` for graph clips
+- Review `logs/extract/run_*.jsonl` for any `status: "error"` PDFs, adjust parameters if needed, and note issues/fixes in `data/README.md`
 - Create first git commit (`extract-baseline`) for reproducibility
 
-**Day 3 — OCR, captions & parallel cleanup**
+**Day 3 — OCR, graph analysis & parallel cleanup**
 - Create `scripts/ocr_images.py` to batch OCR stored page images, capture axis/label text, and write tidy JSON captions per asset.
+- Create `scripts/analyse_graphs.py` to detect chart-like images, merge related vector clips emitted by `scripts/extract_pdf.py` into per-graph composites, and run the digitisation pipeline (axis detection + PlotDigitizer/WebPlotDigitizer/chart-ocr) that extracts axis scales, chart type, and sampled data points into structured JSON under `data/captions/graphs/` with run logs in `logs/graph_analysis/`.
 - Run `scripts/ocr_images.py` to capture labels (axes, units, numbers, component names)
 - Save JSON captions to `data/captions/<image>.json`
-- While OCR runs, start cleaning noisy text (headers, watermarks) and log fixes in `logs/cleanup/`
-- Update coverage table with OCR status
+- Run `scripts/analyse_graphs.py` on the merged graph images to populate graph metadata (axis info, sampled points, trend descriptors); log outcomes in `logs/graph_analysis/`.
+- While OCR/digitizer runs, start cleaning noisy text (headers, watermarks) and log fixes in `logs/cleanup/`
+- Update coverage table with OCR + graph-analysis status
 
 **Day 4 — Parse questions, align mark schemes & seed retrieval**
-- Create `scripts/parse_questions.py` to combine raw text, captions, and mark schemes into structured question objects with metadata links.
+- Create `scripts/parse_questions.py` to combine raw text, captions, graph metadata, and mark schemes into structured question objects with metadata links.
 - Run `scripts/parse_questions.py` to detect questions, sections, marks
 - Match each to mark scheme answers; log ambiguities for manual review
-- Link images by page number and keywords (“Figure 1”)
+- Link images by page number and keywords (“Figure 1”); attach graph JSON (axis info, sampled data, chart type) when available so downstream MCQs can reason about trends and numeric relationships.
 - Build lightweight retrieval index under `data/index/` (FAISS/sqlite) and document parameters in `logs/index/`
 - Output: `data/parsed/questions.jsonl` with fields including metadata `{status:'pending', reviewer?:string}`
 
@@ -182,6 +186,7 @@ NOTE: MARKDOWN PROGRESS + WHAT'S IMPLEMENENTED + DELIVERABLES WHEN YOU FINISH A 
 **Scripts you’ll create (simple, small)**
 - `scripts/extract_pdf.py` — save per-page text and images
 - `scripts/ocr_images.py` — run OCR on images and build simple JSON (labels/axes/units)
+- `scripts/analyse_graphs.py` — detect chart-like diagrams and extract axis scales, sampled data points, and chart metadata
 - `scripts/parse_questions.py` — split into questions and match mark schemes
 - `scripts/make_seed_data.py` — hand-curate the first 100 great MCQs
 - `scripts/auto_generate.py` — use a local model to draft more MCQs (with mark scheme context)

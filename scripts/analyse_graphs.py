@@ -1,7 +1,3 @@
-vector clip emitted by the Day 2 extractor. The script groups clips that
-belong to the same PDF page, renders a single composite crop, and feeds that
-combined image to the digitiser. Full-page fallbacks are only analysed if no
-embedded/vector assets exist, keeping the focus on real diagrams.
 """Graph analysis pipeline for extracted exam diagrams.
 
 This script detects chart-like images in `data/images/` (or a supplied root),
@@ -155,6 +151,8 @@ class GraphCandidate:
     logical_image: str
     asset_kind: str
     source_images: List[str]
+    fallback_path: Optional[Path] = None
+    fallback_logical: Optional[str] = None
 
 
 @dataclass
@@ -184,21 +182,25 @@ def default_assets() -> Dict[str, List[Tuple[int, Path]]]:
     return {"vector": [], "embedded": [], "render": []}
 
 
-def create_single_candidate(image_path: Path, image_root: Path, asset_kind: str) -> GraphCandidate:
+def create_single_candidate(image_path: Path, image_root: Path, asset_kind: str,
+                           source_override: Optional[List[str]] = None,
+                           metadata_override: Optional[Path] = None) -> GraphCandidate:
     relative = image_path.relative_to(image_root)
-    metadata_rel = relative.with_suffix(".json")
+    metadata_rel = metadata_override or relative.with_suffix(".json")
     logical_image = str(relative)
+    sources = source_override if source_override is not None else [logical_image]
     return GraphCandidate(
         display_path=image_path,
         metadata_rel_path=metadata_rel,
         logical_image=logical_image,
         asset_kind=asset_kind,
-        source_images=[logical_image],
+        source_images=sources,
     )
 
 
 def merge_vector_clips(relative_parent: Path, page: int, vector_assets: List[Tuple[int, Path]],
-                       image_root: Path, output_root: Path) -> GraphCandidate:
+                      image_root: Path, output_root: Path,
+                      fallback_render: Optional[Path]) -> GraphCandidate:
     if not vector_assets:
         raise ValueError("No vector assets provided for merge")
     vectors_sorted = [path for _, path in sorted(vector_assets, key=lambda item: item[0])]
@@ -225,6 +227,9 @@ def merge_vector_clips(relative_parent: Path, page: int, vector_assets: List[Tup
     logical_image = str(Path("__composites__") / relative_parent / composite_name)
     metadata_rel = relative_parent / f"{Path(composite_name).stem}.json"
     source_images = [str(path.relative_to(image_root)) for path in vectors_sorted]
+    fallback_logical = None
+    if fallback_render is not None:
+        fallback_logical = str(fallback_render.relative_to(image_root))
 
     return GraphCandidate(
         display_path=composite_path,
@@ -232,6 +237,8 @@ def merge_vector_clips(relative_parent: Path, page: int, vector_assets: List[Tup
         logical_image=logical_image,
         asset_kind="vector_composite",
         source_images=source_images,
+        fallback_path=fallback_render,
+        fallback_logical=fallback_logical,
     )
 
 
@@ -252,18 +259,17 @@ def collect_candidates(image_root: Path, output_root: Path) -> List[GraphCandida
 
     for (relative_parent, page), assets in sorted(page_assets.items(), key=lambda item: (item[0][0].as_posix(), item[0][1])):
         vector_assets = assets["vector"]
+        render_assets = sorted(assets["render"], key=lambda item: item[0])
+        fallback_render = render_assets[0][1] if render_assets else None
         if vector_assets:
-            candidates.append(merge_vector_clips(relative_parent, page, vector_assets, image_root, output_root))
+            candidates.append(merge_vector_clips(relative_parent, page, vector_assets, image_root, output_root, fallback_render))
 
         embedded_assets = sorted(assets["embedded"], key=lambda item: item[0])
         if embedded_assets:
             for _, path in embedded_assets:
                 candidates.append(create_single_candidate(path, image_root, "embedded"))
-        elif not vector_assets:
-            render_assets = sorted(assets["render"], key=lambda item: item[0])
-            if render_assets:
-                _, render_path = render_assets[0]
-                candidates.append(create_single_candidate(render_path, image_root, "page_render"))
+        elif not vector_assets and fallback_render is not None:
+            candidates.append(create_single_candidate(fallback_render, image_root, "page_render"))
 
     for path in sorted(others, key=lambda p: p.relative_to(image_root).as_posix()):
         candidates.append(create_single_candidate(path, image_root, "other"))
@@ -294,6 +300,20 @@ def process_candidate(candidate: GraphCandidate, image_root: Path, output_root: 
         logging.debug("Graph analysis: %s", candidate.display_path)
         score = detect_axis_score(candidate.display_path)
         if score < threshold:
+            if candidate.asset_kind == "vector_composite" and candidate.fallback_path:
+                fallback_sources = list(dict.fromkeys(candidate.source_images + ([candidate.fallback_logical] if candidate.fallback_logical else [])))
+                fallback_candidate = GraphCandidate(
+                    display_path=candidate.fallback_path,
+                    metadata_rel_path=candidate.metadata_rel_path,
+                    logical_image=candidate.fallback_logical or candidate.logical_image,
+                    asset_kind="page_render_fallback",
+                    source_images=fallback_sources,
+                )
+                fallback_result = process_candidate(fallback_candidate, image_root, output_root, threshold, overwrite)
+                if fallback_result.status != "error":
+                    message = f"Composite axis score {score:.2f}; used fallback render"
+                    fallback_result.message = f"{message} | {fallback_result.message}".strip(" |")
+                return fallback_result
             return GraphResult(
                 image=candidate.logical_image,
                 metadata_path="",

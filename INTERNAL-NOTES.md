@@ -9,3 +9,8 @@ Day 2 recap:
 - created `scripts/extract_pdf.py`, which reads each exam PDF and saves the text plus clear pictures (uses pdfplumber + PyMuPDF to pull both photos and vector drawings)
 - erased the old text/image outputs, ran a fresh full pass (2025-10-16 00:09) and confirmed every file processed cleanly (`ok=1163 warn=0 error=0`)
 - we now have high-quality diagrams ready for the Day 3 caption/graph pass
+
+Day 3 recap (so far):
+- created and ran the image caption script (`scripts/ocr_images.py`) across the all boards, so every diagram now has a small text note saved beside it
+- each run finished with thousands of “ok” files and “warns” only when the picture is just a logo or a pure graph (no text for Tesseract to read); there were no errors or crashes
+- the warnings are expected: they simply flag blank captions for images that are pure visuals, which is fine because the graph analysis script will handle those diagrams next

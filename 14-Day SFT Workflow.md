@@ -96,6 +96,7 @@ NOTE: MARKDOWN PROGRESS + WHAT'S IMPLEMENENTED + DELIVERABLES WHEN YOU FINISH A 
 - Run `scripts/ocr_images.py` to capture labels (axes, units, numbers, component names)
 - Save JSON captions to `data/captions/<image>.json`
 - Run `scripts/analyse_graphs.py` on the merged graph images to populate graph metadata (axis info, sampled points, trend descriptors); log outcomes in `logs/graph_analysis/`.
+- Graph composites now get a quick axis sanity-check—if the stitched view looks wrong, we reuse the high-DPI page render instead of digitising the broken collage.
 - While OCR/digitizer runs, start cleaning noisy text (headers, watermarks) and log fixes in `logs/cleanup/`
 - Update coverage table with OCR + graph-analysis status
 

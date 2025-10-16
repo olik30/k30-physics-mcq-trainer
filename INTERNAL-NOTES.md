@@ -4,7 +4,7 @@ Day 1 recap:
 - deleted old pre-2017 papers and the unused WJEC Unit 5 folder so we only keep the years we agreed on
 
 Day 2 recap:
-- built the PDF extractor script and installed the tools so we can pull text + diagrams
-- ran it on a fresh sample to check outputs, then on the whole dataset
-- spotted which papers failed (we’ll skip dodgy MA files and fix image colour handling next)
-- re-ran extraction on 2025-10-14 with new image handling; logs show `ok=1141 warn=0 error=0` (MA PDFs skipped)
+- first version of the PDF extractor could pull page text + screenshots, but it sometimes saved blank/low-quality diagrams and crashed on the big mark-scheme PDFs
+- strengthened it so the diagrams stay sharp and the mark-scheme files no longer crash
+- erased the old text/image outputs, ran a fresh full pass (2025-10-16 00:09) and confirmed every file processed cleanly (`ok=1163 warn=0 error=0`)
+- we now have high-quality diagrams ready for the Day 3 caption/graph pass

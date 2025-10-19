@@ -96,6 +96,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Attempt to use ChartOCR (if installed) for richer extraction",
     )
+    parser.add_argument(
+        "--minimal-output",
+        action="store_true",
+        help="Write compact summary-only JSON instead of cloning full metadata",
+    )
     return parser.parse_args()
 
 
@@ -399,6 +404,7 @@ def process_graph_json(
     image_root: Path,
     overwrite: bool,
     use_chartocr: bool,
+    minimal_output: bool,
 ) -> Tuple[str, str]:
     relative_path = json_path.relative_to(graph_root)
     target_path = output_root / relative_path
@@ -434,8 +440,20 @@ def process_graph_json(
     payload["graph_summary"] = summary
     payload["updated_at"] = datetime.utcnow().isoformat() + "Z"
 
+    if minimal_output:
+        output_payload = {
+            "image": payload.get("image"),
+            "graph_summary": payload["graph_summary"],
+            "graph_metadata_source": str(json_path.relative_to(graph_root)),
+            "updated_at": payload["updated_at"],
+        }
+    else:
+        output_payload = payload
+
     target_path.parent.mkdir(parents=True, exist_ok=True)
-    target_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    target_path.write_text(
+        json.dumps(output_payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     return (payload.get("image", str(json_path)), "updated")
 
 
@@ -461,9 +479,10 @@ def main() -> None:
         graph_root=args.graph_json_dir,
         output_root=args.output_dir,
         caption_dir=args.caption_dir,
-            image_root=args.image_dir,
-            overwrite=args.overwrite,
-            use_chartocr=args.chartocr,
+        image_root=args.image_dir,
+        overwrite=args.overwrite,
+        use_chartocr=args.chartocr,
+            minimal_output=args.minimal_output,
         )
         status_counter[status] += 1
         logging.debug("%s -> %s", image_id, status)

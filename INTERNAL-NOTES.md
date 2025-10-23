@@ -21,4 +21,4 @@ Day 4 recap (so far):
 - picked 40 AQA diagrams that cover mechanics, electricity, waves, fields, and data-handling charts so we have a good mix for manual checks
 - wrote human-friendly descriptions for each picture (added as matching JSON files next to the PNGs under `data/graph_human_descriptions/AQA`)
 - the CSV we used for editing is gone so only the cleaned images + notes remain in the repo
-- still to do: make a small comparison script/notebook that lines up our manual notes with the auto summaries and flags any gaps or oddities before we move on
+- built `scripts/graph_benchmark_compare.py` so we can rerun the graph pipeline on those pictures, compare the auto blurbs with our human notes, and get a quick report that highlights any graphs the machine still misunderstands. The script writes everything into `data/graph_human_descriptions_for_comparison/` (fresh analysis JSON, auto summaries, staging copies of the PNGs, and a CSV/JSONL/Markdown report). The first run shows all 40 auto summaries are still off (they read like generic axis graphs), so they need tuning before we rely on them.

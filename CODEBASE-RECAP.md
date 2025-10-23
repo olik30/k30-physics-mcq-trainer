@@ -1,6 +1,6 @@
 # K30 Creator Codebase Recap
 
-This document summarizes the current K30 Creator repository so a new AI (or developer) can understand what exists, how the pieces interact, and which constraints any future training/integration work must respect.
+This document summarizes the current K30 Creator repository so a new developer can understand what exists, how the pieces interact, and which constraints any future training/integration work must respect.
 
 ## Product Snapshot
 - **Purpose**: Help A-level students turn exam questions (typed text, images, PDFs, DOCX) into guided multiple-choice sequences with hints and a final worked solution.

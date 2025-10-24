@@ -113,7 +113,6 @@ NOTE: MARKDOWN PROGRESS + WHAT'S IMPLEMENENTED + DELIVERABLES WHEN YOU FINISH A 
 - Sample 30-40 representative diagrams (mix of standard charts and complex schematics) into `data/graph_benchmark/`.
 - **Human**: label each with component notes, expected textual summary, and correctness checks; this becomes the target set for automated graph reading.
 - Record which boards/topics are covered and log gaps in `INTERNAL-NOTES.md`.
-- Build a lightweight coverage script/notebook to compare automated summaries vs. benchmark ground truth and flag low-confidence cases.
 
 **Day 5 — Graph understanding pre-training**
 - Create `scripts/train_graph_model.py` to fine-tune a lightweight vision-language model (or the base LLM) using benchmark annotations + auto metadata so it can answer graph-centric questions.

@@ -77,12 +77,11 @@ NOTE: MARKDOWN PROGRESS + WHAT'S IMPLEMENENTED + DELIVERABLES WHEN YOU FINISH A 
 
 **Day 6 — Parse questions, align mark schemes & seed retrieval**
 - Create `scripts/parse_questions.py` to combine raw text, captions, graph metadata/summary, and mark schemes into structured question objects with metadata links.
-- Run `scripts/parse_questions.py` to detect questions, sections, marks.
-- Match each to mark scheme answers; log ambiguities for manual review.
-- Link images by page number and keywords (“Figure 1”); attach graph JSON (axis info, sampled data, chart type) when available so downstream MCQs can reason about trends and numeric relationships.
-- Build lightweight retrieval index under `data/index/` (FAISS/sqlite) and document parameters in `logs/index/`.
-- Output: `data/parsed/questions.jsonl` with fields including metadata `{status:'pending', reviewer?:string}`.
-- **Human**: spot-check parsed questions and linked graph summaries; correct any mismatches before continuing.
+- Run `scripts/parse_questions.py` to detect questions, sections, marks and write the cleaned output to `data/parsed/questions.jsonl` (1004 questions).
+- Matched each item to its mark-scheme text, trimming rubric-only lines so we keep concise answers (numeric answers survive as plain numbers).
+- Linked images/graphs by page and figure reference; graph metadata is attached so later steps can pull axes and trend info.
+- Built the SQLite lookup (`scripts/build_question_index.py --force`) so `data/index/questions.db` now holds questions (1004), parts (1126) and assets (3194) with run logs in `logs/index/`.
+- **Human next**: spot-check a few entries in `data/parsed/questions.jsonl` and the SQLite DB (`data/index/questions.db`) to confirm question text, parts, mark schemes, and assets line up.
 
 **Day 7 — Create first training examples + review lane**
 - Create `scripts/make_seed_data.py` to help curate MCQ JSON by merging parsed questions with mark-scheme context and enforcing the schema.

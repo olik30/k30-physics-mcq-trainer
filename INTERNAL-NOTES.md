@@ -31,3 +31,9 @@ Day 5 recap:
 - saved the trained weights as `models/adapters/graph_reader_v1` and kept a note of the run in `logs/train/graph_reader_v1` so we remember what happened.
 - wrote the score sheet to `results/graph_reader_v1/metrics.json` and the eight example write-ups to `results/graph_reader_v1/samples.jsonl`; two of those examples are still a bit too different from the human wording.
 - anything in `models/` is a saved model we can load later, and anything in `results/` is a score report from the most recent test run.
+
+Day 6 recap:
+- `scripts/parse_questions.py` now reads each paper, skips the noisy headers, and writes clean question records to `data/parsed/questions.jsonl` (about 1000 items in plain English). This file is the master list of questions we will sample from on Day 7, so we avoid editing the raw OCR again.
+- `scripts/build_question_index.py --force` turns that JSONL into a handy `data/index/questions.db` file so we can look up any question, part, or linked image quickly. It is just a lightweight SQLite file, no special software needed.
+- Row counts (questions 1004 / parts 1126 / assets 3194) checked out, so the database matches the JSON and is ready for the next day. If those numbers ever drift, rebuild with `--force` and re-run the quick row-count command.
+- what we basically did: we now have the raw questions, mark schemes, and linked images living in one tidy source (`questions.jsonl`) plus a searchable version in SQLite, so Day 7 can focus on curating MCQs instead of parsing paperwork.

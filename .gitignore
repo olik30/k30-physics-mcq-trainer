@@ -11,3 +11,8 @@ __pycache__/
 # OS clutter
 .DS_Store
 Thumbs.db
+
+# Generated data, indexes, logs
+data/parsed/
+data/index/
+logs/

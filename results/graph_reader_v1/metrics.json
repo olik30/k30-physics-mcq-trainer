@@ -1,0 +1,7 @@
+{
+  "mean_rouge_l": 0.3121495573760487,
+  "mean_bleu1": 0.3883582725754761,
+  "mean_cosine": 0.7753199189901352,
+  "cosine_below_threshold": 2,
+  "cosine_threshold": 0.7
+}

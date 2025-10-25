@@ -1,2 +1,13 @@
 # Ignore local datasets and large assets
+# Local Python environments
+.venv*/
+venv/
+ENV/
 
+# Python bytecode caches
+__pycache__/
+*.py[cod]
+
+# OS clutter
+.DS_Store
+Thumbs.db

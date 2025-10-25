@@ -1,9 +1,5 @@
 **Two-Week Training Plan (Physics MCQ Generator)**
 
-This guide is written for non‑technical readers. Follow it day by day to build a local, low‑cost AI that turns physics exam questions into high‑quality MCQs with hints and explanations.
-
-We’ll use your own papers \+ mark schemes, run everything on your PC, and avoid paid APIs.
-
 **Why train our own model?**
 The current Azure-backed decoder still drops accuracy despite multiple guardrails: it hallucinates intermediate steps, produces weak hints, and sometimes misaligns MCQ steps with mark-scheme logic. Maintaining that stack is costly (per-call Azure fees) and requires layered post-processing to patch symptoms. Training a local SFT model lets us ground generation directly on our own papers, enforce board-specific structure natively, and eliminate recurring cloud costs while keeping the guardrails we already built.
 
@@ -25,48 +21,6 @@ In short: we turn your papers and mark schemes into a clean, labeled dataset (in
 \- It stays accurate by looking up the mark scheme (“open‑book”) before answering
 
 ---
-
-**Install these once (Day 0\)**
-
-**Programs**  
-\- Python 3.10 or newer  
-\- VS Code (code editor)  
-\- Git (version control)  
-\- Ollama (simple local model runner) or vLLM (faster, optional)
-
-Windows setup (PowerShell)
-
-**Python packages (install once)**  
-pip install \--upgrade pip  
-pip install transformers datasets peft bitsandbytes accelerate sentence-transformers scikit-learn pdfplumber pymupdf pytesseract pillow camelot-py\[cv\] pandas tqdm fastapi uvicorn jsonschema
-
-**Optional math OCR (skip if not needed)**  
-pip install nougat-ocr  
-\`\`\`  
-Also install:  
-\- Poppler for Windows (needed by some PDF tools): https://github.com/oschwartz10612/poppler-windows/releases/  
-\- Tesseract OCR (Windows installer): https://github.com/UB-Mannheim/tesseract/wiki
-
-**Folder layout (we’ll create as we go)**
-```
-project/
-  data/
-    pdfs/                # your papers + mark schemes
-    raw/                 # extracted text
-    images/              # extracted images
-    parsed/              # per-question JSONL + QA metadata
-    captions/            # image captions (text)
-    formatted/           # training-ready JSONL
-    index/               # retrieval index (FAISS/sqlite)
-    review/              # curator notes, approvals
-  models/
-    adapters/            # LoRA adapters from training
-  scripts/               # small helper scripts
-  results/               # evaluation reports
-  config/
-    adapters.yaml        # adapter status tracking
-  logs/                  # training, evaluation, extraction logs
-```
 
 **Current dataset scope (Oct 2025 update)**
 - Active board: AQA (all raw text, images, OCR captions, graph analysis, and descriptions live under `data/`)
@@ -115,11 +69,11 @@ NOTE: MARKDOWN PROGRESS + WHAT'S IMPLEMENENTED + DELIVERABLES WHEN YOU FINISH A 
 - Record which boards/topics are covered and log gaps in `INTERNAL-NOTES.md`.
 
 **Day 5 — Graph understanding pre-training**
-- Create `scripts/train_graph_model.py` to fine-tune a lightweight vision-language model (or the base LLM) using benchmark annotations + auto metadata so it can answer graph-centric questions.
-- Optional: integrate ChartOCR/UniChart outputs as additional supervised signals.
-- Build `scripts/eval_graph_model.py` to score the model on the benchmark set.
-- **Human**: review sample predictions—especially challenging schematics—to confirm the model now reads them correctly; only move forward once results are acceptable.
-- Snapshot weights/config (`models/adapters/graph_reader_v1/`) and document in `config/adapters.yaml`.
+- Set up a fresh Python 3.12 virtual environment (`.venv312`) and install the core Hugging Face stack in one go: `transformers`, `peft`, `accelerate`, `bitsandbytes`, `datasets`, `sentence-transformers`, `scikit-learn`, `einops`, `safetensors`, `torch`, `torchvision`, `torchaudio` (CUDA 12.4 builds).
+- Confirm the 40 human-labelled graphs in `data/graph_human_descriptions/AQA` all share the same fields and filenames so the trainer can link each PNG with its plain-English notes.
+- Build `scripts/train_graph_model.py`: it streams each PNG directly from disk, pairs it with the human summary, and fine-tunes `Qwen/Qwen2.5-VL-7B-Instruct` in 4-bit (QLoRA) with LoRA rank 16 / α 32 / dropout 0.05, gradient accumulation 4 (effective batch size 4). Training logs land in `logs/train/graph_reader_v1/run_*.json` and the adapter saves to `models/adapters/graph_reader_v1/`.
+- Add `scripts/eval_graph_model.py`: reload the base model + adapter, generate summaries for the 8 held-out diagrams, and measure Rouge-L, BLEU-1, and sentence-transformer cosine similarity (flag anything <0.70). Metrics write to `results/graph_reader_v1/metrics.json` and `samples.jsonl` for easy review.
+- **Human**: keep an eye on GPU VRAM and temperatures (stick with the default batch size if the RTX 5080 is under 12 GB load; drop to grad_accum 2 if needed), then skim the evaluation JSON to be sure the summaries stay factual before moving to Day 6.
 
 **Day 6 — Parse questions, align mark schemes & seed retrieval**
 - Create `scripts/parse_questions.py` to combine raw text, captions, graph metadata/summary, and mark schemes into structured question objects with metadata links.

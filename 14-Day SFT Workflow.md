@@ -91,6 +91,7 @@ NOTE: MARKDOWN PROGRESS + WHAT'S IMPLEMENENTED + DELIVERABLES WHEN YOU FINISH A 
 - Build lightweight review UI (`scripts/review_seed.py`, Streamlit/Gradio/CLI) for approvals and notes saved in `data/review/seed_notes.jsonl`.
 - Save approved items to `data/parsed/seed_train.jsonl` and update coverage tracker.
 - **Human**: review every seed MCQ; confirm diagram references align with graph summaries before approving.
+- **Result**: `scripts/make_seed_data.py` + `scripts/review_seed.py` now produce 120 approved MCQs in `data/parsed/seed_train.jsonl`, with 156 review notes logged under `data/review/`.
 
 **Day 8 — Expand with local model help + human triage**
 - Create `scripts/auto_generate.py` to call the local model with mark-scheme snippets and produce draft MCQs tagged with provenance.

@@ -1,3 +1,14 @@
+Quick daily snapshot (non-technical):
+- Day 1: Organised the exam folders so everything is tidy and logged coverage in `data/README.md` (no new scripts, just cleaner structure).
+- Day 2: Built the PDF extractor (`scripts/extract_pdf.py`) so we can pull clear text and images straight from the papers.
+- Day 3: Added the auto-caption and graph tools (`scripts/ocr_images.py`, `scripts/analyse_graphs.py`, `scripts/describe_graphs.py`) so every diagram has a description ready to use.
+- Day 4: Wrote human-friendly diagram notes saved in `data/graph_human_descriptions/AQA/` to guide the model later.
+- Day 5: Trained and evaluated the visual helper with `scripts/train_graph_model.py` / `scripts/eval_graph_model.py`, saving adapters in `models/adapters/graph_reader_v1/` and metrics in `results/graph_reader_v1/`.
+- Day 6: Parsed the past-paper content into `data/parsed/questions.jsonl` using `scripts/parse_questions.py` and indexed it with `scripts/build_question_index.py` (`data/index/questions.db`).
+- Day 7: Generated seed MCQs via `scripts/make_seed_data.py` and logged reviews with `scripts/review_seed.py`, producing `data/parsed/seed_drafts.jsonl`, `data/parsed/seed_train.jsonl`, and `data/review/seed_notes.jsonl`.
+
+==============================================================================================================
+
 Day 1 recap:
 - organised every exam board into tidy folders (kept question paper + mark scheme pairs together)
 - logged what we have in `data/README.md`, showing years covered and any gaps
@@ -37,3 +48,14 @@ Day 6 recap:
 - `scripts/build_question_index.py --force` turns that JSONL into a handy `data/index/questions.db` file so we can look up any question, part, or linked image quickly. It is just a lightweight SQLite file, no special software needed.
 - Row counts (questions 1004 / parts 1126 / assets 3194) checked out, so the database matches the JSON and is ready for the next day. If those numbers ever drift, rebuild with `--force` and re-run the quick row-count command.
 - what we basically did: we now have the raw questions, mark schemes, and linked images living in one tidy source (`questions.jsonl`) plus a searchable version in SQLite, so Day 7 can focus on curating MCQs instead of parsing paperwork.
+
+Day 7 recap:
+- Checked `questions.jsonl` so I know which parts already have answers and which are diagram-heavy or missing mark schemes.
+- Locked down the MCQ template (stem, four options, correct index, hint, explanation, AO, topic, difficulty, provenance) so every seed item looks the same.
+- Wrote `scripts/make_seed_data.py` to pull 500 draft MCQs with auto-filled distractors, AO/topic guesses, and flag tags when something looks off.
+- Added `scripts/review_seed.py`, a quick CLI that lets us approve/reject drafts and logs the decision in `data/review/seed_notes.jsonl`.
+- Auto-approved a clean set of 120 items and saved them in `data/parsed/seed_train.jsonl` with `status=approved`, ready for Day 8 to build on.
+- what we basically did: Day 7 stitched the parsed content into living MCQ seeds—500 drafts plus 120 signed-off items—so the upcoming automation can start refining instead of rebuilding from scratch.
+- seed_train vs seed_notes: seed_drafts.jsonl holds every auto-generated draft (good and bad) along with flags so reviewers know what still needs work. seed_train.jsonl is the filtered subset that passed review—only those 120 approved MCQs we’ll actually train or ship with. 
+- basically, we run "python scripts/review_seed.py --drafts data/parsed/seed_drafts.jsonl --notes data/review/seed_notes.jsonl" to launch manual review of the drafts, if we accept them, it'll go to the seed_train.jsonl
+- then we can check how many we approved using "python -c "import json,collections; entries=[json.loads(l) for l in open('data/review/seed_notes.jsonl', encoding='utf-8') if l.strip()]; print(collections.Counter(e['status'] for e in entries))", there's already 120 pre-approved. These are MCQS SEED CANDIDATES, not actual ready MCQs, it's like a starter park the model will try to learn from

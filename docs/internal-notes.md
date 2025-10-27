@@ -6,6 +6,7 @@ Quick daily snapshot (non-technical):
 - Day 5: Trained and evaluated the visual helper with `scripts/train_graph_model.py` / `scripts/eval_graph_model.py`, saving adapters in `models/adapters/graph_reader_v1/` and metrics in `results/graph_reader_v1/`.
 - Day 6: Parsed the past-paper content into `data/parsed/questions.jsonl` using `scripts/parse_questions.py` and indexed it with `scripts/build_question_index.py` (`data/index/questions.db`).
 - Day 7: Turned the best MCQ drafts into a 460-question starter pack, logged reviewer decisions, and parked the messy ones for follow-up.
+- Day 8: Hooked up an auto-generation draft loop, but the model’s answers still need work—everything landed in the reject pile for another pass.
 
 ==============================================================================================================
 
@@ -55,3 +56,9 @@ Day 7 recap:
 - Spot-checked 18 clean drafts, then approved the rest that passed the checklist—now 460 questions sit in the “good” pile with reviewer notes.
 - Promoted the approved set into `data/parsed/seed_train.jsonl`; any draft not approved stays in `seed_drafts.jsonl` for a later fix pass.
 - what we basically did: Day 7 gave us a 460-question starter pack we trust, plus a smaller reject list so we know exactly which items still need hand-cleaning.
+
+Day 8 recap:
+- Set up the local draft generator (`scripts/auto_generate.py`) and confirmed Ollama (`qwen2.5:7b-instruct`) runs locally.
+- First 100-model batch (`data/parsed/auto_drafts.jsonl`, log in `logs/auto_generate/run.jsonl`) still gave wobbly physics and bad numerics, so we rejected them all via `scripts/review_seed.py`.
+- Tweaked the prompt/sanitiser and tried a 20-question pilot (`python scripts/auto_generate.py --limit 20`), but those explanations were still off, so the second batch also stays in `data/review/seed_notes.jsonl` as “rejected”.
+- Bottom line: Day 8 pipeline works end-to-end, but the drafts aren’t good enough yet—we’ll revisit the prompt and heuristics on Day 9 before generating another set.

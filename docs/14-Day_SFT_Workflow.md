@@ -92,12 +92,12 @@ NOTE: MARKDOWN PROGRESS + WHAT'S IMPLEMENENTED + DELIVERABLES WHEN YOU FINISH A 
 - **Result**: Clean MCQ starter pack (460 items in `seed_train.jsonl`), 45 rejected items tagged for rework, plus a review log we can reuse on new drafts.
 
 **Day 8 — Expand with local model help + human triage**
-- Create `scripts/auto_generate.py` to call the local model with mark-scheme snippets and produce draft MCQs tagged with provenance.
-- Use local model (Ollama Qwen2.5-7B-Instruct or Llama-3.1-8B) via `scripts/auto_generate.py`.
-- Prompt with mark scheme snippets, image_context, retrieval results.
-- Route outputs through the same review UI for accept/reject tagging (store rejected reasons).
-- Save accepted items to `data/parsed/auto_train_candidates.jsonl` with status metadata.
-- **Human**: triage auto-generated MCQs, reject hallucinations, and add reviewer notes for problematic diagrams/topics.
+- `scripts/auto_generate.py` now calls Ollama `qwen2.5:7b-instruct` with stricter prompts (ASCII-only, schema enforced) and sanitises outputs.
+- Generated 100 auto drafts (`data/parsed/auto_drafts.jsonl`) plus run log (`logs/auto_generate/run.jsonl`). Common issues captured: poor numeric accuracy (e.g. mass mis-scaling), weak particle-physics reasoning, AO/topic left null.
+- Started review via `scripts/review_seed.py`; rejected flawed examples and queued the remainder for stratified sampling before promotion.
+- Saved reviewer decisions to `data/review/seed_notes.jsonl`; flagged items listed there for rewrite on Day 9.
+- **Human next**: finish the review pass, build a clean `auto_train_candidates.jsonl` subset, and document any prompt tweaks needed before the next batch.
+- Follow-up pilot with refined prompt/validators (`--limit 20`) still produced weak circuit reasoning, so all items remain rejected pending another generation pass.
 
 **Day 9 — Filter, unit-test & balance**
 - Create `scripts/filter_balance.py` with CLI flags to validate JSON records, enforce AO/topic balance, and deduplicate by embeddings.

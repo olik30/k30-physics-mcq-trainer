@@ -83,15 +83,13 @@ NOTE: MARKDOWN PROGRESS + WHAT'S IMPLEMENENTED + DELIVERABLES WHEN YOU FINISH A 
 - Built the SQLite lookup (`scripts/build_question_index.py --force`) so `data/index/questions.db` now holds questions (1004), parts (1126) and assets (3194) with run logs in `logs/index/`.
 - **Human next**: spot-check a few entries in `data/parsed/questions.jsonl` and the SQLite DB (`data/index/questions.db`) to confirm question text, parts, mark schemes, and assets line up.
 
-**Day 7 — Create first training examples + review lane**
-- Create `scripts/make_seed_data.py` to help curate MCQ JSON by merging parsed questions with mark-scheme context and enforcing the schema.
-- Curate ~120 balanced questions into clean MCQ JSON (options, correct_index, hint, explanation, AO).
-- Use mark scheme, image_context, and retrieved snippets.
-- Create `scripts/review_seed.py` to provide a lightweight approval UI/CLI that writes reviewer decisions and notes to disk.
-- Build lightweight review UI (`scripts/review_seed.py`, Streamlit/Gradio/CLI) for approvals and notes saved in `data/review/seed_notes.jsonl`.
-- Save approved items to `data/parsed/seed_train.jsonl` and update coverage tracker.
-- **Human**: review every seed MCQ; confirm diagram references align with graph summaries before approving.
-- **Result**: `scripts/make_seed_data.py` + `scripts/review_seed.py` now produce 120 approved MCQs in `data/parsed/seed_train.jsonl`, with 156 review notes logged under `data/review/`.
+- **Day 7 — Create first training examples + review lane**
+- Harden `scripts/make_seed_data.py` so each draft includes clear flags (missing figure, duplicate option, rubric text leak) before hitting review.
+- Run the generator over all parsed parts (~505 drafts this run) and store them in `data/parsed/seed_drafts.jsonl`.
+- Use `scripts/review_seed.py` to log reviewer decisions; first reject the flagged drafts, then sample a handful of clean items before approving the remainder.
+- Promote all approved items into `data/parsed/seed_train.jsonl` (current total: 460 approved MCQs) and record notes in `data/review/seed_notes.jsonl`.
+- **Human**: tidy the rejected list for future rewrites, double-check any diagram-heavy items, and confirm reviewer counts before moving on.
+- **Result**: Clean MCQ starter pack (460 items in `seed_train.jsonl`), 45 rejected items tagged for rework, plus a review log we can reuse on new drafts.
 
 **Day 8 — Expand with local model help + human triage**
 - Create `scripts/auto_generate.py` to call the local model with mark-scheme snippets and produce draft MCQs tagged with provenance.

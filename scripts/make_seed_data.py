@@ -40,6 +40,21 @@ NUMERIC_RE = re.compile(r"[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?")
 DEPENDENCY_RE = re.compile(r"(?:part|answer to|result from)\s+(?:part|question)\s*[A-Za-z0-9]+", re.I)
 NOISE_FRAGMENT_RE = re.compile(r"(PMT|Turn over|Do not write outside the box|ANSWER IN THE SPACES PROVIDED)", re.I)
 
+RUBRIC_INDICATORS = (
+    "if no other mark",
+    "if no other award",
+    "if no other credit",
+    "do not award",
+    "graph axes",
+    "sensible axes",
+    "allow",
+    "accept",
+    "credit",
+    "award",
+    "penalise",
+    "ignore",
+)
+
 
 TEXT_DISTRACTOR_BANK: Dict[str, Sequence[str]] = {
     "particle": ["Proton", "Neutron", "Electron", "Muon", "Pion", "Kaon"],
@@ -229,27 +244,66 @@ def format_numeric(value: float, template: str) -> str:
     return NUMERIC_RE.sub(formatted, template, count=1)
 
 
+def numeric_decimals(template: str) -> int:
+    match = NUMERIC_RE.search(template)
+    if not match:
+        return 0
+    digits = match.group()
+    if "." not in digits:
+        return 0
+    return len(digits.split(".")[1])
+
+
+def compute_numeric_step(base: float, decimals: int) -> float:
+    if decimals > 0:
+        return max(10 ** -decimals, round(abs(base) * 0.1, decimals) or 10 ** -decimals)
+    magnitude = abs(base)
+    if magnitude >= 1000:
+        return 100.0
+    if magnitude >= 100:
+        return 20.0
+    if magnitude >= 10:
+        return 5.0
+    if magnitude >= 1:
+        return 1.0
+    return 0.1
+
+
 def generate_numeric_options(answer: str) -> Tuple[List[str], List[str]]:
     base = is_numeric_answer(answer)
     if base is None:
         return [], ["numeric_parse_failed"]
-    deltas = [0.0, -0.1 * base, 0.1 * base, 0.2 * base]
-    variants = []
+    decimals = numeric_decimals(answer)
+    step = compute_numeric_step(base, decimals)
+    offsets = [0, -step, step, 2 * step, -2 * step, 3 * step, -3 * step]
+    variants: List[str] = []
     flags: List[str] = []
-    for delta in deltas:
-        candidate = base + delta
-        variants.append(format_numeric(candidate, answer))
-    if len(set(variants)) < 4:
-        # Fall back to simple rounding variants
-        variants = [
-            format_numeric(base, answer),
-            format_numeric(base * 0.9, answer),
-            format_numeric(base * 1.1, answer),
-            format_numeric(base * 1.2, answer),
-        ]
-    if len(set(variants)) < 4:
+    for offset in offsets:
+        candidate_value = base + offset
+        candidate = format_numeric(candidate_value, answer)
+        if candidate not in variants:
+            variants.append(candidate)
+        if len(variants) == 4:
+            break
+    if len(variants) < 4:
+        # As a last resort, append straightforward numeric strings with bounded attempts
+        attempt = 1
+        while len(variants) < 4 and attempt <= 10:
+            candidate_value = base + step * attempt
+            candidate = f"{candidate_value:.{decimals}f}" if decimals else str(int(round(candidate_value)))
+            if candidate not in variants:
+                variants.append(candidate)
+            attempt += 1
+        if len(variants) < 4:
+            # final fallback: add simple integer offsets without rounding collisions
+            while len(variants) < 4:
+                candidate_value = base + attempt
+                candidate = f"{candidate_value:.{decimals}f}" if decimals else str(int(candidate_value))
+                attempt += 1
+                if candidate not in variants:
+                    variants.append(candidate)
         flags.append("numeric_duplicates")
-    return variants, flags
+    return variants[:4], flags
 
 
 def classify_prompt(prompt: str, stem: str) -> Optional[str]:
@@ -371,6 +425,41 @@ def build_image_context(part: QuestionPart) -> List[Dict[str, object]]:
     return context
 
 
+def detect_record_issues(record: Dict[str, object]) -> List[str]:
+    flags: List[str] = []
+
+    question_text = str(record.get("question") or "").lower()
+    image_context = record.get("image_context") or []
+    if any(keyword in question_text for keyword in ("figure", "diagram", "graph", "table")) and not image_context:
+        flags.append("figure_reference_missing_asset")
+
+    options = record.get("options") or []
+    if len(options) != 4:
+        flags.append("option_count_not_four")
+    if any(isinstance(opt, str) and "placeholder option" in opt.lower() for opt in options):
+        flags.append("placeholder_option_present")
+
+    explanation = str(record.get("explanation") or "")
+    if is_rubric_heavy(explanation):
+        flags.append("rubric_leakage_explanation")
+
+    hint = str(record.get("hint") or "")
+    if is_rubric_heavy(hint):
+        flags.append("rubric_leakage_hint")
+
+    metadata = record.get("metadata") or {}
+    original_prompt = str(metadata.get("original_prompt") or "").lower()
+    if any(keyword in original_prompt for keyword in ("figure", "diagram", "graph", "table")) and not image_context:
+        flags.append("prompt_refs_missing_asset")
+
+    return flags
+
+
+def is_rubric_heavy(text: str) -> bool:
+    lowered = text.lower()
+    return any(token in lowered for token in RUBRIC_INDICATORS)
+
+
 def compose_id(part: QuestionPart) -> str:
     slug = part.question_id.replace("/", "_").replace(" ", "")
     code = part.code.replace(".", "_").replace(" ", "")
@@ -404,6 +493,11 @@ def assemble_record(part: QuestionPart, sibling_answers: Sequence[str]) -> Dict[
             "flags": flags,
         },
     }
+    extra_flags = detect_record_issues(record)
+    if extra_flags:
+        combined = list(dict.fromkeys(flags + extra_flags))
+        record["metadata"]["flags"] = combined
+        flags = combined
     record["metadata"]["status"] = "draft" if not flags else "needs_review"
     return record
 
@@ -428,6 +522,8 @@ def eligible(part: QuestionPart) -> bool:
         return False
     prompt = clean_prompt(part.prompt)
     if len(prompt.split()) < 3 and not part.stem:
+        return False
+    if is_rubric_heavy(part.mark_scheme):
         return False
     return True
 

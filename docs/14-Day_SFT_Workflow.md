@@ -83,23 +83,21 @@ NOTE: MARKDOWN PROGRESS + WHAT'S IMPLEMENENTED + DELIVERABLES WHEN YOU FINISH A 
 - Built the SQLite lookup (`scripts/build_question_index.py --force`) so `data/index/questions.db` now holds questions (1004), parts (1126) and assets (3194) with run logs in `logs/index/`.
 - **Human next**: spot-check a few entries in `data/parsed/questions.jsonl` and the SQLite DB (`data/index/questions.db`) to confirm question text, parts, mark schemes, and assets line up.
 
-**Day 7 — Create first training examples + review lane**
-- Create `scripts/make_seed_data.py` to help curate MCQ JSON by merging parsed questions with mark-scheme context and enforcing the schema.
-- Curate ~120 balanced questions into clean MCQ JSON (options, correct_index, hint, explanation, AO).
-- Use mark scheme, image_context, and retrieved snippets.
-- Create `scripts/review_seed.py` to provide a lightweight approval UI/CLI that writes reviewer decisions and notes to disk.
-- Build lightweight review UI (`scripts/review_seed.py`, Streamlit/Gradio/CLI) for approvals and notes saved in `data/review/seed_notes.jsonl`.
-- Save approved items to `data/parsed/seed_train.jsonl` and update coverage tracker.
-- **Human**: review every seed MCQ; confirm diagram references align with graph summaries before approving.
-- **Result**: `scripts/make_seed_data.py` + `scripts/review_seed.py` now produce 120 approved MCQs in `data/parsed/seed_train.jsonl`, with 156 review notes logged under `data/review/`.
+- **Day 7 — Create first training examples + review lane**
+- Harden `scripts/make_seed_data.py` so each draft includes clear flags (missing figure, duplicate option, rubric text leak) before hitting review.
+- Run the generator over all parsed parts (~505 drafts this run) and store them in `data/parsed/seed_drafts.jsonl`.
+- Use `scripts/review_seed.py` to log reviewer decisions; first reject the flagged drafts, then sample a handful of clean items before approving the remainder.
+- Promote all approved items into `data/parsed/seed_train.jsonl` (current total: 460 approved MCQs) and record notes in `data/review/seed_notes.jsonl`.
+- **Human**: tidy the rejected list for future rewrites, double-check any diagram-heavy items, and confirm reviewer counts before moving on.
+- **Result**: Clean MCQ starter pack (460 items in `seed_train.jsonl`), 45 rejected items tagged for rework, plus a review log we can reuse on new drafts.
 
 **Day 8 — Expand with local model help + human triage**
-- Create `scripts/auto_generate.py` to call the local model with mark-scheme snippets and produce draft MCQs tagged with provenance.
-- Use local model (Ollama Qwen2.5-7B-Instruct or Llama-3.1-8B) via `scripts/auto_generate.py`.
-- Prompt with mark scheme snippets, image_context, retrieval results.
-- Route outputs through the same review UI for accept/reject tagging (store rejected reasons).
-- Save accepted items to `data/parsed/auto_train_candidates.jsonl` with status metadata.
-- **Human**: triage auto-generated MCQs, reject hallucinations, and add reviewer notes for problematic diagrams/topics.
+- `scripts/auto_generate.py` now calls Ollama `qwen2.5:7b-instruct` with stricter prompts (ASCII-only, schema enforced) and sanitises outputs.
+- Generated 100 auto drafts (`data/parsed/auto_drafts.jsonl`) plus run log (`logs/auto_generate/run.jsonl`). Common issues captured: poor numeric accuracy (e.g. mass mis-scaling), weak particle-physics reasoning, AO/topic left null.
+- Started review via `scripts/review_seed.py`; rejected flawed examples and queued the remainder for stratified sampling before promotion.
+- Saved reviewer decisions to `data/review/seed_notes.jsonl`; flagged items listed there for rewrite on Day 9.
+- **Human next**: finish the review pass, build a clean `auto_train_candidates.jsonl` subset, and document any prompt tweaks needed before the next batch.
+- Follow-up pilot with refined prompt/validators (`--limit 20`) still produced weak circuit reasoning, so all items remain rejected pending another generation pass.
 
 **Day 9 — Filter, unit-test & balance**
 - Create `scripts/filter_balance.py` with CLI flags to validate JSON records, enforce AO/topic balance, and deduplicate by embeddings.

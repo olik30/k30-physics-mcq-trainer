@@ -35,3 +35,10 @@
 
   - **Metadata docs** (optional README or YAML): notes about which dataset/run produced the weights, useful for provenance when we ship updates. 
   - This is the travel diary that says where the brain came from and what it’s been trained on.
+
+## When the project finishes, what the AI can do
+- Generate fresh AQA-style MCQs from the parsed past papers, complete with hints and explanations.
+- Keep answers numerically accurate and student-friendly, so they look like real exam items.
+- Auto-tag each question with AO, topic, and difficulty for easy filtering or lesson planning.
+- Run locally/offline via Ollama—no outside API needed once the weights sit in `models/`.
+- Feed approved questions straight into `auto_train_candidates.jsonl`, so new training runs can start immediately.

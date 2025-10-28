@@ -17,7 +17,21 @@
 - `scripts/` – Python tools for extraction, OCR, parsing, MCQ curation, and model training.
 - `data/` – extracted text/images, parsed questions, MCQ drafts/train sets, indices.
 - `logs/` – run logs for extraction, parsing, analysis, training.
-- `models/` – trained adapters (Day 5 graph model currently).
 - `results/` – evaluation metrics and sample outputs.
 - `.venv*/` – local Python environments (ignored in Git).
 
+## MOST IMPORTANT FOLDER
+- `models/` – this is where the trained model actually lives.
+  - **Weight checkpoints** (e.g., `model.safetensors`, `adapter.bin`): huge tensor files that hold the learned parameters—the “brain” we fine-tune. 
+  - Think of this as the master recipe that tells the AI how to answer questions.
+
+  - **Adapter layers** (if we use LoRA/PEFT): smaller delta-weight files that sit beside the base checkpoint so we can swap or merge variations without retraining from scratch. 
+  - Picture them as lightweight add-ons that give the base model new tricks without rebuilding everything.
+
+  - **Config files** (e.g., `config.json`, `generation_config.json`): describe the architecture, layer sizes, and default decoding settings so any runtime knows how to wire the weights. - They act like blueprints so the software knows how to assemble the brain correctly.
+
+  - **Tokenizer assets** (e.g., `tokenizer.json`, `tokenizer.model`, `special_tokens_map.json`): map between raw text and token IDs so the model can read prompts and write answers.
+  - They’re the translation dictionary between human words and what the model understands.
+
+  - **Metadata docs** (optional README or YAML): notes about which dataset/run produced the weights, useful for provenance when we ship updates. 
+  - This is the travel diary that says where the brain came from and what it’s been trained on.

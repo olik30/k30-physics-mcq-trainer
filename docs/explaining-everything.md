@@ -7,8 +7,31 @@ Day 6: We turned every exam question into tidy records that link the question,
 Day 7: We created a first batch of multiple-choice questions, reviewed them, and kept the 460 best ones.
 Day 8: We hooked up a local AI to draft new questions and logged where its answers still fell short.
 Day 9: We built an automatic checker that cleans the question files, spots broken entries, and shows topic gaps.
-Day 10: We’ll automatically bundle the approved questions into the training format and slice them into practice sets.
-Day 11: We’ll let the AI train on that cleaned set while recording progress so we can see how it learns.
+Day 10: We bundled the approved questions into the training format and sliced them into train/validation/test files automatically.
+Day 11: We let the AI train on that cleaned set (one quick sanity run so far) and recorded the training stats.
 Day 12: We’ll run automatic report cards on the trained AI to see where it still struggles.
 Day 13: We’ll have the AI draft fresh questions for the weak spots and prep a simple review tool.
 Day 14: We’ll compare the trained versions, package everything, and set up an easy station for you to give feedback.
+
+Inside data/
+pdfs/ – the original exam papers and mark schemes, untouched.
+raw/ – plain text dumps made from those PDFs (one file per page).
+images/ – every picture or diagram clipped out of the papers.
+captions/ – short OCR descriptions of each image so we remember what it shows.
+graph_analysis/ – measurements and geometry pulled from chart-style diagrams (axes, slopes, etc.).
+graph_descriptions/ – tidy one-paragraph explanations of those graphs.
+graph_human_descriptions/ – the human-written “gold” summaries we used for training.
+parsed/ – structured question files (question text, mark schemes, linked assets).
+index/ – a quick-lookup database built from the parsed questions.
+filtered/ – the cleaned MCQ drafts that passed Day 9 checks.
+review/ – notes on what we approved/rejected during manual reviews.
+other_syllabuses/ – archived boards we’re not using right now, kept out of the AQA pipeline.
+
+Other top-level folders
+docs/ – all written guides, daily recaps, and workflow plans.
+logs/ – run-by-run transcripts from scripts (extraction, OCR, training, etc.).
+models/ – saved model files and adapter checkpoints.
+config/ – machine-readable notes about each adapter run (`config/adapters.yaml`).
+results/ – evaluation metrics, dataset stats, and sample outputs.
+scripts/ – every command-line helper we’ve written (extract, filter, format, train…).
+tests/ – automated checks to make sure scripts behave before we rely on them.

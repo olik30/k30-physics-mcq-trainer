@@ -9,6 +9,7 @@ Quick daily snapshot (non-technical):
 - Day 8: Hooked up an auto-generation draft loop, but the model’s answers still need work—everything landed in the reject pile for another pass.
 - Day 9: Added an automatic checker that cleans the MCQ files, flags broken entries, and shows which topics/AO tags still need attention.
 - Day 10: Packaged the approved MCQs into train/val/test chat files so the AI can start learning without any manual prep.
+- Day 11: Trained the first local adapter (tiny sanity run) and captured logs/config so the full GPU run can pick up where we left off.
 
 ==============================================================================================================
 
@@ -77,3 +78,10 @@ Day 10 recap:
 - Ran it across the seed + auto-clean sets to generate `data/formatted/train.jsonl` (383 items), `val.jsonl` (47), and `test.jsonl` (49), with hashes captured in `data/formatted/manifest.json`.
 - Logged aggregate stats (AO/topic/difficulty splits per split) to `results/dataset_stats.json` for easier tracking of coverage skew.
 - Confirmed the whole export stays deterministic with seed=42, so we can rebuild identical splits whenever the cleaned dataset changes.
+
+Day 11 recap:
+- Added `scripts/train_lora.py`, which loads the chat-formatted data, attaches LoRA adapters, streams JSONL logs, and updates `config/adapters.yaml` with run metadata.
+- Installed the Hugging Face stack (`transformers`, `datasets`, `peft`, `accelerate`, `pyyaml`) and fixed compatibility issues by forcing the script into CPU mode—our RTX 5080 isn’t recognised by Torch 2.6.0 yet.
+- Ran a one-step smoke test using `Qwen/Qwen2.5-0.5B-Instruct` (`--device-map cpu`) to prove the pipeline end-to-end; the run logged `loss≈3.43`, saved weights in `models/adapters/adapter_v1/`, and wrote structured events to `logs/train/adapter_v1.jsonl`.
+- `config/adapters.yaml` now tracks when/how adapter_v1 was produced (base model, seeds, hyperparameters, dataset hashes) so future automated runs can append new adapters without manual bookkeeping.
+- Next GPU-ready run just needs the CUDA build that supports the 5080; once that’s installed we can swap `--device-map cpu` back to `auto` and let the full 7B model train overnight.

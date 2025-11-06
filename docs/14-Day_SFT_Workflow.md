@@ -116,6 +116,7 @@ NOTE: MARKDOWN PROGRESS + WHAT'S IMPLEMENENTED + DELIVERABLES WHEN YOU FINISH A 
 - Use `scripts/train_lora.py` with configurable hyperparameters (LoRA rank 16–32, bf16/fp16, lr ≈2e-4, gradient checkpointing as needed).
 - Stream training metrics to `logs/train/adapter_v1.jsonl` and store checkpoints in `models/adapters/adapter_v1/`, updating `config/adapters.yaml` automatically.
 - Capture key performance traces (loss curves, throughput) so reviewers have immediate context once they log on after Day 14.
+- ✅ First smoke test completed: ran `python scripts/train_lora.py --base-model Qwen/Qwen2.5-0.5B-Instruct --device-map cpu --max-steps 1 --no-eval` to prove end-to-end wiring. Saved adapter weights under `models/adapters/adapter_v1/`, metrics to `logs/train/adapter_v1.jsonl`, and catalogued the run in `config/adapters.yaml`. Full 7B training will resume once a CUDA build that recognises the RTX 5080 is installed.
 
 **Day 12 — Automated evaluation & surfacing weak spots**
 - Run `scripts/eval.py` on `test.jsonl` to compute JSON validity %, accuracy, distractor diversity, numeric tolerance, AO distribution alignment, and hint quality heuristics.

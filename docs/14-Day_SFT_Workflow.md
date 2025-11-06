@@ -122,6 +122,7 @@ NOTE: MARKDOWN PROGRESS + WHAT'S IMPLEMENENTED + DELIVERABLES WHEN YOU FINISH A 
 - Run `scripts/eval.py` on `test.jsonl` to compute JSON validity %, accuracy, distractor diversity, numeric tolerance, AO distribution alignment, and hint quality heuristics.
 - Save metrics to `results/adapter_v1/metrics.json` and representative samples to `results/adapter_v1/samples.jsonl`; generate CSV/HTML dashboards that can be opened by reviewers later.
 - Auto-tag items that fall below numeric or reasoning thresholds and queue them for further synthesis.
+- ✅ `python scripts/eval.py --trust-remote-code --device cpu` completed (≈15 min on the 0.5B adapter). Metrics: JSON validity 83.7%, schema-valid 69.4%, numeric-clean 100%, but answer_match 0% and AO1/AO2 skew (AO2+AO3 missing). Samples logged to `results/adapter_v1/samples.jsonl` for Day 13 triage.
 
 **Day 13 — Synthetic refresh & feedback tooling**
 - Use the evaluation tags to auto-select candidate questions for regeneration with `scripts/auto_generate.py`, passing them through the sanitise/filter chain into `data/filtered/refresh_candidates.jsonl`.

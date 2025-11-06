@@ -10,6 +10,7 @@ Quick daily snapshot (non-technical):
 - Day 9: Added an automatic checker that cleans the MCQ files, flags broken entries, and shows which topics/AO tags still need attention.
 - Day 10: Packaged the approved MCQs into train/val/test chat files so the AI can start learning without any manual prep.
 - Day 11: Trained the first local adapter (tiny sanity run) and captured logs/config so the full GPU run can pick up where we left off.
+- Day 12: Ran the evaluation harness on the adapter, logging JSON validity (~84%), schema pass rate (~69%), and highlighting the zero-answer-match issue plus AO skew that we need to fix before a serious rollout.
 
 ==============================================================================================================
 
@@ -85,3 +86,10 @@ Day 11 recap:
 - Ran a one-step smoke test using `Qwen/Qwen2.5-0.5B-Instruct` (`--device-map cpu`) to prove the pipeline end-to-end; the run logged `loss≈3.43`, saved weights in `models/adapters/adapter_v1/`, and wrote structured events to `logs/train/adapter_v1.jsonl`.
 - `config/adapters.yaml` now tracks when/how adapter_v1 was produced (base model, seeds, hyperparameters, dataset hashes) so future automated runs can append new adapters without manual bookkeeping.
 - Next GPU-ready run just needs the CUDA build that supports the 5080; once that’s installed we can swap `--device-map cpu` back to `auto` and let the full 7B model train overnight.
+
+Day 12 recap:
+- Shipped `scripts/eval.py`, which loads the chat-formatted conversations, replays them through the base model + LoRA adapter, parses the JSON output, and scores schema compliance, distractor diversity, AO coverage, and simple text-length heuristics.
+- Full CPU run over `data/formatted/test.jsonl` took ~15 minutes (0.5B base + adapter). Results land in `results/adapter_v1/metrics.json` with per-item dumps in `results/adapter_v1/samples.jsonl`.
+- Headline numbers: JSON validity 83.7%, schema-valid 69.4%, numeric sanitisation 100%, but answer matches 0% (the model rarely reproduces the reference distractor/answer pairs). AO distribution is heavily skewed (AO1/AO2 dominate; AO2+AO3 missing entirely).
+- Sample logs highlight repeated options, generic AO labels, and waffle-heavy hints/explanations—good evidence that one-step training isn't enough.
+- Next steps once Day 13 synthesises new data: tighten the evaluation thresholds, add regression tests targeting distinct options, and rerun after a longer LoRA fine-tune (ideally on GPU).

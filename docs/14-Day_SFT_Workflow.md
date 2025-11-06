@@ -34,9 +34,9 @@ NOTE: MARKDOWN PROGRESS + WHAT'S IMPLEMENENTED + DELIVERABLES WHEN YOU FINISH A 
 **Day 1 — Collect, catalogue & secure data**
 - Put all PDFs into `data/pdfs/` (papers and their matching mark schemes)
 - Keep filenames consistent (e.g., `AQA_2019_P1.pdf`, `AQA_2019_P1_MS.pdf`)
-- Create `data/README.md` with coverage table (board, year, topic, marks) to track gaps
+- Track coverage (board, year, topic, marks) inside `docs/internal-notes.md` so the gap table lives with the rest of the project notes
 - If material is sensitive, store `data/` on encrypted storage (BitLocker) and document handling rules
-- Initialise Git LFS and track `data/` + `logs/` so large binaries stay out of normal git history; record commands in `INTERNAL-NOTES.md`
+- Initialise Git LFS and track `data/` + `logs/` so large binaries stay out of normal git history; record commands in `docs/internal-notes.md`
 - Goal: clean, organized, auditable source files
 
 **Day 2 — Extract text + images (batch + log)**
@@ -47,8 +47,8 @@ NOTE: MARKDOWN PROGRESS + WHAT'S IMPLEMENENTED + DELIVERABLES WHEN YOU FINISH A 
 - Output:
   - `data/raw/<paper>_page<N>.txt`
   - `data/images/<paper>_page<N>_img<M>.png` and `..._render.png` for graphs or page snapshots (vector clips optional via `--enable-vector-clips`)
-- Review `logs/extract/run_*.jsonl` for any `status: "error"` PDFs, adjust parameters if needed, and note issues/fixes in `data/README.md`
-- For the current AQA-only phase, confirm `other_syllabuses/` still holds the archived boards so fresh runs don’t mix scopes; update coverage notes to reflect "AQA complete, others pending".
+- Review `logs/extract/run_*.jsonl` for any `status: "error"` PDFs, adjust parameters if needed, and note issues/fixes in `docs/internal-notes.md`
+- For the current AQA-only phase, confirm `other_syllabuses/` still holds the archived boards so fresh runs don’t mix scopes; update coverage notes in `docs/internal-notes.md` to reflect "AQA complete, others pending".
 - Create first git commit (`extract-baseline`) for reproducibility
 
 **Day 3 — OCR, graph analysis & parallel cleanup**
@@ -100,67 +100,42 @@ NOTE: MARKDOWN PROGRESS + WHAT'S IMPLEMENENTED + DELIVERABLES WHEN YOU FINISH A 
 - Follow-up pilot with refined prompt/validators (`--limit 20`) still produced weak circuit reasoning, so all items remain rejected pending another generation pass.
 
 **Day 9 — Filter, unit-test & balance**
-- Create `scripts/filter_balance.py` with CLI flags to validate JSON records, enforce AO/topic balance, and deduplicate by embeddings.
-- Implement `scripts/filter_balance.py` checks:
-  - Valid JSON, 4 unique options, correct_index 0–3.
-  - No meta options, length limits, unit/significant-figure consistency.
-- Create `tests/test_filters.py` to cover schema violations, duplicate detection, AO gaps, and sig-fig/unit edge cases.
-- Add Pytest suite `tests/test_filters.py` covering duplicates, AO gaps, sig-fig errors; run daily.
-- Deduplicate via sentence-transformer cosine similarity; enforce AO/topic balance using coverage tracker.
-- Output: `data/parsed/train_clean.jsonl` (~2–4k items).
-- **Human**: review filter warnings (e.g., near-duplicate questions, unit mismatches) and decide whether to keep/fix/drop each case.
+- Ship `scripts/filter_balance.py` with flags for `--output`, `--report`, `--coverage-report`, `--emit-flagged`, and `--strict` so we can reuse it on any JSONL pile (seeds, auto drafts, review notes).
+- Reuse the Day 8 sanitiser/validator inside the script, then add extra guards for empty options, missing AO/topic/difficulty tags, short explanations, and duplicate question/provenance combos.
+- Emit coverage snapshots for AO/topic/difficulty plus a JSONL of anything we drop (`data/review/day9_seed_train_flagged.jsonl`) so manual fixes stay traceable.
+- Add targeted unit tests in `tests/test_filter_balance.py` (Pytest) to lock in difficulty normalisation, duplicate detection, and strict-mode warnings.
+- Run the filter over `data/parsed/seed_train.jsonl` (459 kept, 1 dropped) and the fresh `data/parsed/auto_drafts.jsonl`, saving markdown + JSON reports under `reports/day9_*.{md,json}` and cleaned copies in `data/filtered/`.
+- Summarise `data/review/seed_notes.jsonl` in notes mode to highlight the 623 undecided rows so future reviewers can fill the gaps; defer triage of flagged items until the post-Day 14 human handoff.
 
-**Day 10 — Format, validate & snapshot**
-- Create `scripts/format_for_sft.py` to convert validated MCQs into chat-completion format and run JSON schema checks during export.
-- Use `scripts/format_for_sft.py` to create chat format (system/user/assistant).
-- Run jsonschema validation on formatted files; fail fast on malformed records.
-- Split into train/val/test (80/10/10) and record dataset stats in `results/dataset_stats.json`.
-- Snapshot dataset (`git tag dataset-v1` or record hash in `data/README.md`).
-- Output: `data/formatted/train.jsonl`, `val.jsonl`, `test.jsonl`.
-- **Human**: sanity-check a handful of formatted samples to ensure instructions/images/graph summaries still align after formatting.
+- **Day 10 — Format, validate & stage (fully automated)**
+- Build `scripts/format_for_sft.py` to convert validated MCQs into chat/completion format and enforce the JSON schema during export.
+- Generate train/val/test splits (80/10/10) automatically, writing stats to `results/dataset_stats.json` and recording snapshot hashes in `docs/internal-notes.md`.
+- Produce `data/formatted/train.jsonl`, `val.jsonl`, and `test.jsonl`, plus a machine-readable manifest that downstream tooling can consume when humans begin review.
 
-**Day 11 — Fine-tune locally (LoRA) + log metrics**
-- Create `scripts/train_lora.py` to launch LoRA fine-tuning with configurable hyperparameters and structured logging.
-- Train with `scripts/train_lora.py` (LoRA rank 16–32, bf16/fp16, lr ~2e-4, gradient checkpointing if needed).
-- Log training metrics to `logs/train/adapter_v1.jsonl`.
-- Save adapter to `models/adapters/adapter_v1/` and update `config/adapters.yaml` (`adapter_v1: status=staging`).
+**Day 11 — Fine-tune locally (LoRA) + structured logging**
+- Use `scripts/train_lora.py` with configurable hyperparameters (LoRA rank 16–32, bf16/fp16, lr ≈2e-4, gradient checkpointing as needed).
+- Stream training metrics to `logs/train/adapter_v1.jsonl` and store checkpoints in `models/adapters/adapter_v1/`, updating `config/adapters.yaml` automatically.
+- Capture key performance traces (loss curves, throughput) so reviewers have immediate context once they log on after Day 14.
 
-**Day 12 — Evaluate, benchmark & log**
-- Create `scripts/eval.py` to load adapters, run validation splits, compute core metrics, and emit sample outputs for review.
-- Run `scripts/eval.py` on `test.jsonl`.
-- Capture metrics: JSON validity %, answer accuracy, distractor diversity, numeric tolerance, AO distribution, hint quality flags.
-- Save to `results/adapter_v1/metrics.json` and `results/adapter_v1/samples.jsonl`.
-- **Human**: review 30–50 outputs (especially diagram-heavy questions) and log notes in `data/review/eval_notes.md`; update coverage tracker with weak topics.
+**Day 12 — Automated evaluation & surfacing weak spots**
+- Run `scripts/eval.py` on `test.jsonl` to compute JSON validity %, accuracy, distractor diversity, numeric tolerance, AO distribution alignment, and hint quality heuristics.
+- Save metrics to `results/adapter_v1/metrics.json` and representative samples to `results/adapter_v1/samples.jsonl`; generate CSV/HTML dashboards that can be opened by reviewers later.
+- Auto-tag items that fall below numeric or reasoning thresholds and queue them for further synthesis.
 
-**Day 13 — Target weak spots & refresh dataset**
-- Add ~100 curated examples covering weak boards/topics/AO gaps.
-- Run full review + filter pipeline (Days 7–10).
-- Snapshot dataset (`dataset-v1.1`) and document changes in `data/README.md`.
-- Keep original seed set as high-quality reference.
-- **Human**: choose which weak areas to target, curate/approve new examples, and document rationale.
+**Day 13 — Synthetic refresh & feedback tooling**
+- Use the evaluation tags to auto-select candidate questions for regeneration with `scripts/auto_generate.py`, passing them through the sanitise/filter chain into `data/filtered/refresh_candidates.jsonl`.
+- Stand up a lightweight feedback API/CLI (`scripts/feedback_queue.py`) that can surface any JSONL file (seed, auto, refresh) and record reviewer inputs when the human loop begins.
+- Document the feedback workflow in `docs/feedback-playbook.md` so the human reviewers have a ready-made guide.
 
-**Day 14 — Second fine-tune + adapter management**
-- Update `scripts/train_lora.py` (if needed) or add config hooks to support multiple adapters cleanly.
-- Train new adapter `models/adapters/adapter_v2/`.
-- Update `config/adapters.yaml` with metrics (statuses: staging/prod/archive).
-- Evaluate both adapters; compare results in `results/adapter_comparison.md`.
-- Promote higher-performing adapter to `status=prod`.
+**Day 14 — Compare adapters & prep the review station**
+- Run a second LoRA pass (`models/adapters/adapter_v2/`) to compare against adapter_v1, storing metrics in `results/adapter_comparison.json` and rendering charts in `results/adapter_comparison.md`.
+- Pre-populate the feedback tooling with the latest metrics, sample outputs, and flagged items; generate a consolidated `handoff/day14_artifacts/` bundle containing datasets, adapters, evaluation dashboards, and a ready-to-use review queue.
+- Confirm all automation scripts can run unattended (cron/batch) so the human team only needs to open the feedback tool, review MCQs, and submit decisions post-Day 14.
 
-**Day 15 — Serve, integrate & regression test**
-- Create `scripts/serve_model.py` to expose the trained adapter over HTTP with health checks and latency logging.
-- Serve adapter locally with `scripts/serve_model.py`; add health check and latency logging.
-- Create `scripts/regression_suite.py` to replay archived questions against both Azure and local paths and compare structured outputs.
-- Update `netlify/functions/decode.ts` to call the local endpoint while retaining validators.
-- Run regression suite (`scripts/regression_suite.py`) over 20–30 archived questions; compare against Azure outputs and log diffs in `results/integration_tests.md`.
-- Maintain temporary Azure fallback until local path proves stable.
-- **Human**: inspect regression diffs, verify deployment checklist, and green-light rollout.
-
-**Day 16 — Trial run, sign-off & roadmap**
-- Run 50–100 real questions end-to-end; log telemetry (latency, validity, user issues) in `results/post_launch_log.jsonl`.
-- Update `config/adapters.yaml` to mark shipped adapter as `prod` and archive older versions.
-- Review failure log, create action items for next sprint (data gaps, prompt tweaks).
-- Decide rollout: keep local model primary, Azure fallback until confidence >95%; schedule fallback retirement once metrics stay stable.
-- **Human**: coordinate dry-run testing, review telemetry, and sign off on the production plan.
+**Post-Day 14 — Human QA & iterative improvement (starts after automation ends)**
+- Use the bundled feedback tool to review flagged MCQs, approve or rewrite items, and feed decisions back into `data/review/*` logs for the next automated pass.
+- Inspect evaluation dashboards, choose the preferred adapter checkpoint, and note follow-up training requests; no deployment or rollout tasks are required at this stage.
+- Repeat the generate → filter → human-feedback loop to refresh the dataset as often as needed, letting the automated tooling handle retraining between review cycles.
 
 ---
 
@@ -174,7 +149,8 @@ NOTE: MARKDOWN PROGRESS + WHAT'S IMPLEMENENTED + DELIVERABLES WHEN YOU FINISH A 
 - `scripts/review_seed.py` — lightweight UI/CLI for human approval + notes
 - `scripts/filter_balance.py` — validate JSON, units/sig-figs, dedup, and balance the set
 - `scripts/format_for_sft.py` — turn into chat format for training
-- `tests/test_filters.py` — automated checks for schema, options, AO tags, units
+- `scripts/feedback_queue.py` — surface queued MCQs for human grading after Day 14
+- `tests/test_filter_balance.py` — automated checks for schema, duplicates, AO tags, units
 - `scripts/train_lora.py` — fine-tune with LoRA (logs metrics)
 - `scripts/eval.py` — compute metrics and sample outputs
 - `scripts/serve_model.py` — start a local HTTP API for your model

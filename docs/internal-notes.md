@@ -7,6 +7,8 @@ Quick daily snapshot (non-technical):
 - Day 6: Parsed the past-paper content into `data/parsed/questions.jsonl` using `scripts/parse_questions.py` and indexed it with `scripts/build_question_index.py` (`data/index/questions.db`).
 - Day 7: Turned the best MCQ drafts into a 460-question starter pack, logged reviewer decisions, and parked the messy ones for follow-up.
 - Day 8: Hooked up an auto-generation draft loop, but the model’s answers still need work—everything landed in the reject pile for another pass.
+- Day 9: Added an automatic checker that cleans the MCQ files, flags broken entries, and shows which topics/AO tags still need attention.
+- Day 10: Packaged the approved MCQs into train/val/test chat files so the AI can start learning without any manual prep.
 
 ==============================================================================================================
 
@@ -62,3 +64,16 @@ Day 8 recap:
 - First 100-model batch (`data/parsed/auto_drafts.jsonl`, log in `logs/auto_generate/run.jsonl`) still gave wobbly physics and bad numerics, so we rejected them all via `scripts/review_seed.py`.
 - Tweaked the prompt/sanitiser and tried a 20-question pilot (`python scripts/auto_generate.py --limit 20`), but those explanations were still off, so the second batch also stays in `data/review/seed_notes.jsonl` as “rejected”.
 - Bottom line: Day 8 pipeline works end-to-end, but the drafts aren’t good enough yet—we’ll revisit the prompt and heuristics on Day 9 before generating another set.
+
+Day 9 recap:
+- Built the cleaner `scripts/filter_balance.py` that reuses the Day 8 sanitiser, spots empty choices, strange topics, and duplicate provenance, and prints coverage stats in one go.
+- Added automated checks in `tests/test_filter_balance.py` (Pytest) so schema errors, duplicate questions, and warning-only drops stay covered.
+- Ran the filter over `data/parsed/seed_train.jsonl`, keeping 459 good MCQs and logging the single broken item plus 106 “difficulty missing” warnings to `data/review/day9_seed_train_flagged.jsonl` and `reports/day9_seed_train.json`.
+- Pointed the same tool at the 20 model drafts (`data/parsed/auto_drafts.jsonl`) and confirmed every item now passes the schema checks; coverage lives in `reports/day9_auto_drafts.json`.
+- Summarised the review log (`data/review/seed_notes.jsonl`) so we can see that all 623 entries still need explicit decisions; the markdown summary sits in `reports/day9_review_notes.md`.
+
+Day 10 recap:
+- Wrote `scripts/format_for_sft.py` so the filtered MCQs become OpenAI-style conversations (system prompt + user prompt + strict JSON answer) ready for fine-tuning.
+- Ran it across the seed + auto-clean sets to generate `data/formatted/train.jsonl` (383 items), `val.jsonl` (47), and `test.jsonl` (49), with hashes captured in `data/formatted/manifest.json`.
+- Logged aggregate stats (AO/topic/difficulty splits per split) to `results/dataset_stats.json` for easier tracking of coverage skew.
+- Confirmed the whole export stays deterministic with seed=42, so we can rebuild identical splits whenever the cleaned dataset changes.

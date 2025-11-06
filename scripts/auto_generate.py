@@ -218,6 +218,11 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--model", default="qwen2.5:7b-instruct")
     parser.add_argument("--limit", type=int, default=50)
+    parser.add_argument(
+        "--allow-existing",
+        action="store_true",
+        help="Generate even if question part already exists in seed/train datasets",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
@@ -232,27 +237,32 @@ def main() -> None:
         return
 
     existing_keys: Set[Tuple[str, str]] = set()
-    for existing_path in (SEED_TRAIN_PATH, SEED_DRAFTS_PATH):
-        if not existing_path.exists():
-            continue
-        with existing_path.open("r", encoding="utf-8") as stream:
-            for line in stream:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    record = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                for source in record.get("sources") or []:
-                    if source.get("type") == "question_part":
-                        existing_keys.add((str(source.get("question_id")), str(source.get("part_code"))))
+    if not args.allow_existing:
+        for existing_path in (SEED_TRAIN_PATH, SEED_DRAFTS_PATH):
+            if not existing_path.exists():
+                continue
+            with existing_path.open("r", encoding="utf-8") as stream:
+                for line in stream:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        record = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    for source in record.get("sources") or []:
+                        if source.get("type") == "question_part":
+                            existing_keys.add((str(source.get("question_id")), str(source.get("part_code"))))
 
-    entries = [
-        entry
-        for entry in load_question_parts(args.input)
-        if (entry.get("question_id"), entry.get("part_code")) not in existing_keys
-    ]
+    question_parts = list(load_question_parts(args.input))
+    if args.allow_existing:
+        entries = question_parts
+    else:
+        entries = [
+            entry
+            for entry in question_parts
+            if (entry.get("question_id"), entry.get("part_code")) not in existing_keys
+        ]
     logging.info("Loaded %d question parts", len(entries))
 
     output_records: List[Dict[str, object]] = []

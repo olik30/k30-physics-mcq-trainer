@@ -10,7 +10,7 @@ Day 9: We built an automatic checker that cleans the question files, spots bro
 Day 10: We bundled the approved questions into the training format and sliced them into train/validation/test files automatically.
 Day 11: We let the AI train on that cleaned set (one quick sanity run so far) and recorded the training stats.
 Day 12: We ran an automatic report card on the trained AI; ~84% of the outputs were valid JSON, ~69% passed the schema checks, but none matched the reference answers—so we have work to do before trusting it.
-Day 13: We’ll have the AI draft fresh questions for the weak spots and prep a simple review tool.
+Day 13: We regenerated 40 of the weakest MCQs, logged why they failed, and built a tiny CLI + playbook so humans can approve or reject them after Day 14.
 Day 14: We’ll compare the trained versions, package everything, and set up an easy station for you to give feedback.
 
 Inside data/

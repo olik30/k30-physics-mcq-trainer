@@ -1,0 +1,15 @@
+{
+  "total_flagged": 46,
+  "reason_counts": {
+    "parse_error:json_decode_error: Invalid \\escape": 3,
+    "json_invalid": 8,
+    "low_distractor_diversity": 13,
+    "answer_mismatch": 46,
+    "schema:options must be distinct": 5,
+    "schema:difficulty_unmapped:None": 5,
+    "parse_error:json_braces_not_found": 5,
+    "schema:options must be a list of 4 strings": 2,
+    "schema:question_short": 1
+  },
+  "output_sources": "data\\parsed\\refresh_sources.jsonl"
+}

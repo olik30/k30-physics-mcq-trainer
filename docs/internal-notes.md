@@ -11,6 +11,7 @@ Quick daily snapshot (non-technical):
 - Day 10: Packaged the approved MCQs into train/val/test chat files so the AI can start learning without any manual prep.
 - Day 11: Trained the first local adapter (tiny sanity run) and captured logs/config so the full GPU run can pick up where we left off.
 - Day 12: Ran the evaluation harness on the adapter, logging JSON validity (~84%), schema pass rate (~69%), and highlighting the zero-answer-match issue plus AO skew that we need to fix before a serious rollout.
+- Day 13: Auto-selected 46 weak MCQs, regenerated 40 clean drafts, and stood up the feedback CLI + playbook so humans can triage them after Day 14.
 
 ==============================================================================================================
 
@@ -93,3 +94,10 @@ Day 12 recap:
 - Headline numbers: JSON validity 83.7%, schema-valid 69.4%, numeric sanitisation 100%, but answer matches 0% (the model rarely reproduces the reference distractor/answer pairs). AO distribution is heavily skewed (AO1/AO2 dominate; AO2+AO3 missing entirely).
 - Sample logs highlight repeated options, generic AO labels, and waffle-heavy hints/explanations—good evidence that one-step training isn't enough.
 - Next steps once Day 13 synthesises new data: tighten the evaluation thresholds, add regression tests targeting distinct options, and rerun after a longer LoRA fine-tune (ideally on GPU).
+
+Day 13 recap:
+- Added `scripts/prepare_refresh.py` to scan `results/adapter_v1/samples.jsonl`, flag the 46 weakest MCQs (JSON errors, duplicate distractors, answer mismatches), and dump their source question parts to `data/parsed/refresh_sources.jsonl` with a Markdown summary for reviewers.
+- Regenerated fresh drafts for 41 unique question parts with `scripts/auto_generate.py --allow-existing`, capturing 40 schema-clean candidates in `data/parsed/refresh_drafts.jsonl` (one part still fails due to scientific-notation placeholders).
+- Ran `scripts/filter_balance.py` on the drafts so `data/filtered/refresh_candidates.jsonl` holds 40 ready-to-review MCQs with zero warnings; coverage logged to `reports/day13_refresh.{json,md}`.
+- Built `scripts/feedback_queue.py` so reviewers can list unapproved MCQs and log `approve/reject/needs-work` decisions into `data/review/day13_feedback_log.jsonl`; seeded one test entry to verify the flow.
+- Documented the human loop in `docs/feedback-playbook.md` (CLI commands, quality bar, decision criteria) and updated the workflow docs to show where the log fits into the post-Day 14 review cycle.

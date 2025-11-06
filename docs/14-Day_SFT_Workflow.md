@@ -128,6 +128,9 @@ NOTE: MARKDOWN PROGRESS + WHAT'S IMPLEMENENTED + DELIVERABLES WHEN YOU FINISH A 
 - Use the evaluation tags to auto-select candidate questions for regeneration with `scripts/auto_generate.py`, passing them through the sanitise/filter chain into `data/filtered/refresh_candidates.jsonl`.
 - Stand up a lightweight feedback API/CLI (`scripts/feedback_queue.py`) that can surface any JSONL file (seed, auto, refresh) and record reviewer inputs when the human loop begins.
 - Document the feedback workflow in `docs/feedback-playbook.md` so the human reviewers have a ready-made guide.
+- ✅ `python scripts/prepare_refresh.py --include-answer-mismatch` flagged 46 weak outputs and wrote `data/parsed/refresh_sources.jsonl` plus a summary (`results/adapter_v1/refresh_summary.{json,md}`).
+- ✅ `python scripts/auto_generate.py --input data/parsed/refresh_sources.jsonl --output data/parsed/refresh_drafts.jsonl --limit 60 --allow-existing` produced 40 clean drafts (one stubborn part still fails due to sci-notation placeholders) which were filtered into `data/filtered/refresh_candidates.jsonl` with reports under `reports/day13_refresh.{json,md}`.
+- ✅ Added `scripts/feedback_queue.py` for listing/annotating MCQs and logged a sample decision in `data/review/day13_feedback_log.jsonl`; reviewer playbook lives in `docs/feedback-playbook.md`.
 
 **Day 14 — Compare adapters & prep the review station**
 - Run a second LoRA pass (`models/adapters/adapter_v2/`) to compare against adapter_v1, storing metrics in `results/adapter_comparison.json` and rendering charts in `results/adapter_comparison.md`.

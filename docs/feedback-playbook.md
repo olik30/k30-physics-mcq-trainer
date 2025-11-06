@@ -30,6 +30,7 @@ python scripts/feedback_queue.py review \
   - `q` → quit the loop
 - After choosing `a/n/r`, the CLI asks you to confirm the correct option. Press **Enter** to accept the model’s choice or type the real answer letter (A–D) to correct it.
 - Then add a short reason/note (optional). Everything is logged to `data/review/day13_feedback_log.jsonl`, including the answer you supplied.
+- The CLI now prints the original prompt, the mark-scheme snippet, and direct paths to the source PDFs/images so you can double-check the official answer without leaving the terminal.
 - Use `--show-reviewed` if you want to revisit items that already have decisions.
 
 > Still want the old behaviour? `list` + `annotate` remain available for ad-hoc use.
@@ -54,6 +55,7 @@ python scripts/feedback_queue.py review \
   1. `needs-work` / `reject` entries are held in `data/filtered/refresh_holdback.jsonl` for regeneration.
   2. Approved items (with your confirmed answer index) are written to `data/filtered/refresh_approved.jsonl` and merged into the next training set.
   3. The evaluation suite (`scripts/eval.py`) is re-run to track progress.
+- Each log entry also records the original `question_id` and `part_code`, keeping the audit trail intact for future regeneration.
 - No manual editing of JSON files is required; stick to the CLI log unless you’re doing deep fixes.
 
 ## 7. One-command refresh cycle

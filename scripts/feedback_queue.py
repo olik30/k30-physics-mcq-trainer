@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 import textwrap
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,9 +35,208 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 DEFAULT_INPUT = Path("data/filtered/refresh_candidates.jsonl")
 DEFAULT_LOG = Path("data/review/day13_feedback_log.jsonl")
+DEFAULT_QUESTIONS_INDEX = Path("data/parsed/questions.jsonl")
+DEFAULT_REFRESH_INDEX = Path("data/parsed/refresh_sources.jsonl")
+
 
 LETTER_LABELS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+ASCII_REPLACEMENTS = {
+    ord("∝"): "proportional to",
+    ord("√"): "sqrt",
+    ord("–"): "-",
+    ord("—"): "-",
+    ord("×"): "x",
+    ord("·"): "*",
+    ord("°"): " degrees",
+    ord("±"): "+/-",
+    ord("µ"): "mu",
+    ord("μ"): "mu",
+    ord("π"): "pi",
+    ord("“"): '"',
+    ord("”"): '"',
+    ord("‘"): "'",
+    ord("’"): "'",
+}
 
+
+@dataclass
+class SourceContext:
+    question_id: str
+    part_code: str
+    mark_scheme: Optional[str]
+    prompt: Optional[str]
+    board: Optional[str]
+    paper: Optional[str]
+    session: Optional[str]
+    question_pdf: Optional[str]
+    mark_scheme_pdf: Optional[str]
+    assets: List[str]
+
+
+def safe_print(*values: object, sep: str = " ", end: str = "\n") -> None:
+    encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+    combined = sep.join(str(value) for value in values)
+    combined = combined.translate(ASCII_REPLACEMENTS)
+    text = combined + (end or "")
+    sys.stdout.write(text.encode(encoding, errors="replace").decode(encoding, errors="replace"))
+
+
+def iter_jsonl(path: Path) -> Iterable[Dict[str, object]]:
+    if not path.exists():
+        return []
+    with path.open("r", encoding="utf-8") as stream:
+        for line_number, line in enumerate(stream, start=1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                yield json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"Invalid JSON on line {line_number} in {path}: {exc}") from exc
+    return []
+
+def extract_source_keys(record: Dict[str, object]) -> Tuple[Optional[str], Optional[str]]:
+    question_id = None
+    part_code = None
+    for source in record.get("sources") or []:
+        if not isinstance(source, dict):
+            continue
+        if source.get("type") == "question_part":
+            question_id = str(source.get("question_id") or "") or None
+            part_code = str(source.get("part_code") or "") or None
+            break
+    if not question_id:
+        question_id = str(record.get("id") or "") or None
+    return question_id, part_code
+
+
+def resolve_asset_paths(raw_assets: Iterable[str]) -> List[str]:
+    resolved: List[str] = []
+    base_paths = [
+        Path("data/images"),
+        Path("data/graph_analysis"),
+        Path("data/graph_descriptions"),
+        Path("data/captions"),
+    ]
+    for asset in raw_assets:
+        if not asset:
+            continue
+        candidate_rel = Path(str(asset).replace("\\", "/"))
+        found = None
+        for base in base_paths:
+            candidate = base / candidate_rel
+            if candidate.exists():
+                found = candidate
+                break
+        if found is not None:
+            resolved.append(str(found))
+        else:
+            resolved.append(str(candidate_rel))
+    return resolved
+
+
+def find_pdf_path(
+    board: Optional[str],
+    paper: Optional[str],
+    session: Optional[str],
+    suffixes: Sequence[str],
+    include_original: bool = True,
+) -> Optional[str]:
+    if not board or not paper or not session:
+        return None
+    base_dir = Path("data/pdfs") / board / paper
+    if not base_dir.exists():
+        return None
+    tokens = [token for token in str(session).replace(".pdf", "").split("_") if token]
+    candidates: List[str] = []
+    if include_original and tokens:
+        candidates.append(" ".join(tokens))
+    for suffix in suffixes:
+        if not tokens:
+            continue
+        candidate_tokens = list(tokens[:-1]) + [suffix]
+        candidates.append(" ".join(candidate_tokens))
+
+    for name in candidates:
+        candidate = base_dir / f"{name}.pdf"
+        if candidate.exists():
+            return str(candidate)
+    return None
+
+
+def extract_assets(record: Dict[str, object]) -> List[str]:
+    assets: List[str] = []
+    asset_block = record.get("assets") or {}
+    for key in ("captions", "graphs", "images"):
+        items = asset_block.get(key)
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            path = item.get("image") or item.get("path")
+            if path:
+                assets.append(str(path))
+    unique_assets = list(dict.fromkeys(assets))
+    return resolve_asset_paths(unique_assets)
+
+
+def build_source_index() -> Dict[str, Dict[str, SourceContext]]:
+    index: Dict[str, Dict[str, SourceContext]] = {}
+    for path in (DEFAULT_QUESTIONS_INDEX, DEFAULT_REFRESH_INDEX):
+        for record in iter_jsonl(path):
+            question_id = record.get("question_id")
+            if not isinstance(question_id, str) or not question_id:
+                continue
+            board = record.get("board") or record.get("metadata", {}).get("board")
+            paper = record.get("paper") or record.get("metadata", {}).get("paper")
+            session = record.get("session") or record.get("metadata", {}).get("session")
+            parts = record.get("parts") or []
+            assets = extract_assets(record)
+            question_pdf = find_pdf_path(
+                board, paper, session, suffixes=[session.split("_")[-1]] if session else [], include_original=True
+            )
+            mark_scheme_pdf = find_pdf_path(board, paper, session, suffixes=["MS", "MA"], include_original=False)
+            for part in parts:
+                if not isinstance(part, dict):
+                    continue
+                code = str(part.get("code") or "")
+                if not code:
+                    continue
+                mark_scheme = part.get("mark_scheme")
+                prompt = part.get("prompt")
+                context = SourceContext(
+                    question_id=question_id,
+                    part_code=code,
+                    mark_scheme=mark_scheme if isinstance(mark_scheme, str) else None,
+                    prompt=prompt if isinstance(prompt, str) else None,
+                    board=board if isinstance(board, str) else None,
+                    paper=paper if isinstance(paper, str) else None,
+                    session=session if isinstance(session, str) else None,
+                    question_pdf=question_pdf,
+                    mark_scheme_pdf=mark_scheme_pdf,
+                    assets=assets,
+                )
+                index.setdefault(question_id, {})[code] = context
+    return index
+
+
+SOURCE_INDEX: Optional[Dict[str, Dict[str, SourceContext]]] = None
+
+
+def get_source_context(question_id: Optional[str], part_code: Optional[str]) -> Optional[SourceContext]:
+    global SOURCE_INDEX
+    if not question_id:
+        return None
+    if SOURCE_INDEX is None:
+        SOURCE_INDEX = build_source_index()
+    part_map = SOURCE_INDEX.get(question_id)
+    if not part_map:
+        return None
+    if part_code and part_code in part_map:
+        return part_map[part_code]
+    # Fallback: return any context for question if part missing.
+    return next(iter(part_map.values()))
 
 def index_to_letter(index: Optional[int], options_len: int) -> Optional[str]:
     if isinstance(index, int) and 0 <= index < options_len and index < len(LETTER_LABELS):
@@ -133,42 +333,83 @@ def wrap_text(text: str, width: int = 88, indent: int = 2) -> str:
     return wrapper.fill(text)
 
 
-def render_record(record: Dict[str, object], record_id: str, current_decision: Optional[Dict[str, object]] = None) -> None:
-    print("=" * 88)
-    print(f"ID: {record_id}")
+def render_record(
+    record: Dict[str, object],
+    record_id: str,
+    current_decision: Optional[Dict[str, object]] = None,
+    source_context: Optional[SourceContext] = None,
+) -> None:
+    safe_print("=" * 88)
+    safe_print(f"ID: {record_id}")
     if current_decision:
         decision = current_decision.get("decision")
         note = current_decision.get("note", "")
         answer_choice = current_decision.get("answer_choice") or current_decision.get("answer")
         if answer_choice:
-            print(f"Current decision: {decision} (answer={answer_choice}; {note})")
+            safe_print(f"Current decision: {decision} (answer={answer_choice}; {note})")
         else:
-            print(f"Current decision: {decision} ({note})")
+            safe_print(f"Current decision: {decision} ({note})")
     question = str(record.get("question") or "")
     if question:
-        print("Question:")
-        print(wrap_text(question))
+        safe_print("Question:")
+        safe_print(wrap_text(question))
     options = record.get("options") or []
     if isinstance(options, list):
         for idx, opt in enumerate(options):
             label = chr(ord("A") + idx)
-            print(f"  {label}. {opt}")
+            safe_print(f"  {label}. {opt}")
     if isinstance(options, list):
         model_letter = index_to_letter(record.get("correct_index"), len(options))
         if model_letter:
-            print(f"Model answer: {model_letter}")
+            safe_print(f"Model answer: {model_letter}")
     hint = record.get("hint")
     if hint:
-        print("Hint:")
-        print(wrap_text(str(hint)))
+        safe_print("Hint:")
+        safe_print(wrap_text(str(hint)))
     explanation = record.get("explanation")
     if explanation:
-        print("Explanation:")
-        print(wrap_text(str(explanation)))
+        safe_print("Explanation:")
+        safe_print(wrap_text(str(explanation)))
     ao = record.get("ao")
     topic = record.get("topic")
     difficulty = record.get("difficulty")
-    print(f"Meta: AO={ao} | Topic={topic} | Difficulty={difficulty}")
+    safe_print(f"Meta: AO={ao} | Topic={topic} | Difficulty={difficulty}")
+    if source_context:
+        origin_bits = []
+        if source_context.board:
+            origin_bits.append(str(source_context.board))
+        if source_context.paper:
+            origin_bits.append(str(source_context.paper))
+        if source_context.session:
+            origin_bits.append(str(source_context.session))
+        source_label = " · ".join(origin_bits) if origin_bits else ""
+        part_label = source_context.part_code or "(part not specified)"
+        if source_context.question_id or source_label:
+            descriptor = source_context.question_id or "Unknown question"
+            if source_label:
+                descriptor = f"{descriptor} ({source_label})"
+            safe_print(f"Source: {descriptor} — part {part_label}")
+        if source_context.prompt:
+            safe_print("Original prompt:")
+            safe_print(wrap_text(source_context.prompt, indent=4))
+        if source_context.mark_scheme:
+            safe_print("Mark scheme note:")
+            safe_print(wrap_text(source_context.mark_scheme, indent=4))
+        file_lines: List[str] = []
+        if source_context.question_pdf:
+            file_lines.append(f"Question PDF: {source_context.question_pdf}")
+        if source_context.mark_scheme_pdf:
+            file_lines.append(f"Mark scheme PDF: {source_context.mark_scheme_pdf}")
+        if file_lines:
+            safe_print("Source files:")
+            for line in file_lines:
+                safe_print(f"  - {line}")
+        if source_context.assets:
+            safe_print("Asset snapshots:")
+            for asset in source_context.assets[:5]:
+                safe_print(f"  - {asset}")
+            if len(source_context.assets) > 5:
+                safe_print(f"  ... ({len(source_context.assets) - 5} more)")
 
 
 def list_records(
@@ -183,14 +424,16 @@ def list_records(
     for record in records:
         record_id = compute_record_id(record)
         decision = log_entries.get(record_id)
+        question_id, part_code = extract_source_keys(record)
+        source_context = get_source_context(question_id, part_code)
         if not show_reviewed and decision:
             continue
-        render_record(record, record_id, decision)
+        render_record(record, record_id, decision, source_context)
         shown += 1
         if shown >= limit:
             break
     if shown == 0:
-        print("No records to display (all reviewed or dataset empty).")
+        safe_print("No records to display (all reviewed or dataset empty).")
 
 
 def annotate_record(
@@ -210,16 +453,27 @@ def annotate_record(
     if target is None:
         raise ValueError(f"Record {record_id} not found in {dataset_path}")
 
+    question_id, part_code = extract_source_keys(target)
+    options = target.get("options") or []
+    options_len = len(options) if isinstance(options, list) else 0
+    model_index = target.get("correct_index") if isinstance(target.get("correct_index"), int) else None
+
     ensure_log(log_path)
     entry = {
         "record_id": record_id,
         "decision": decision,
         "note": note,
     }
+    if question_id:
+        entry["question_id"] = question_id
+    if part_code:
+        entry["part_code"] = part_code
+    if model_index is not None:
+        entry["model_choice"] = index_to_letter(model_index, options_len)
     with log_path.open("a", encoding="utf-8") as stream:
         json.dump(entry, stream, ensure_ascii=False)
         stream.write("\n")
-    print(f"Recorded decision for {record_id}: {decision}")
+    safe_print(f"Recorded decision for {record_id}: {decision}")
 
 
 def interactive_review(
@@ -248,7 +502,9 @@ def interactive_review(
             continue
 
         existing_decision = log_entries.get(record_id)
-        render_record(record, record_id, existing_decision)
+        question_id, part_code = extract_source_keys(record)
+        source_context = get_source_context(question_id, part_code)
+        render_record(record, record_id, existing_decision, source_context)
 
         while True:
             choice = input(
@@ -257,13 +513,13 @@ def interactive_review(
             if not choice:
                 continue
             if choice in {"q", "quit"}:
-                print("Stopping review loop.")
+                safe_print("Stopping review loop.")
                 return
             if choice in {"s", "skip"}:
                 break
             mapped = decision_map.get(choice)
             if not mapped:
-                print("Unrecognised choice. Please enter a, n, r, s, or q.")
+                safe_print("Unrecognised choice. Please enter a, n, r, s, or q.")
                 continue
             options = record.get("options") or []
             options_len = len(options) if isinstance(options, list) else 0
@@ -289,7 +545,7 @@ def interactive_review(
                 if parsed_index is not None:
                     answer_index = parsed_index
                     break
-                print("Please enter a valid option letter (e.g., A) or digit.")
+                safe_print("Please enter a valid option letter (e.g., A) or digit.")
             answer_choice = (
                 index_to_letter(answer_index, options_len) if answer_index is not None else None
             )
@@ -302,18 +558,22 @@ def interactive_review(
                 "note": note,
                 "model_choice": index_to_letter(model_index, options_len),
             }
+            if question_id:
+                entry["question_id"] = question_id
+            if part_code:
+                entry["part_code"] = part_code
             with log_path.open("a", encoding="utf-8") as stream:
                 json.dump(entry, stream, ensure_ascii=False)
                 stream.write("\n")
             log_entries[record_id] = entry
             reviewed_count += 1
-            print(f"Recorded decision for {record_id}: {mapped}")
+            safe_print(f"Recorded decision for {record_id}: {mapped}")
             break
 
     if reviewed_count == 0:
-        print("No records required review (all already decided or dataset empty).")
+        safe_print("No records required review (all already decided or dataset empty).")
     else:
-        print(f"Completed {reviewed_count} reviews.")
+        safe_print(f"Completed {reviewed_count} reviews.")
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:

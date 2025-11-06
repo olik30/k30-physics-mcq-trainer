@@ -141,9 +141,10 @@ NOTE: MARKDOWN PROGRESS + WHAT'S IMPLEMENENTED + DELIVERABLES WHEN YOU FINISH A 
 - Assembled `handoff/day14_artifacts/` via `scripts/create_handoff_bundle.py`, bundling adapters, metrics, refresh candidates, feedback log, and the reviewer playbook with a manifest/README for the QA team.
 
 **Post-Day 14 — Human QA & iterative improvement (starts after automation ends)**
-- Use the bundled feedback tool to review flagged MCQs, approve or rewrite items, and feed decisions back into `data/review/*` logs for the next automated pass.
+- Use the bundled feedback tool to review flagged MCQs, confirm the correct option (override the model’s guess if needed), and capture a short note; every decision lands in `data/review/day13_feedback_log.jsonl`.
+- `run_refresh_cycle.py` now reads that log, writes approved items + corrected answers to `data/filtered/refresh_approved.jsonl`, and parks all `needs-work` / `reject` / pending rows in `data/filtered/refresh_holdback.jsonl` for the next regeneration pass.
 - Inspect evaluation dashboards, choose the preferred adapter checkpoint, and note follow-up training requests; no deployment or rollout tasks are required at this stage.
-- Repeat the generate → filter → human-feedback loop to refresh the dataset as often as needed, letting the automated tooling handle retraining between review cycles.
+- Repeat the generate → filter → review → retrain loop as often as needed—the tooling handles retraining once you’re done reviewing.
 - Shortcut commands:
   - `python scripts/feedback_queue.py review --input data/filtered/refresh_candidates.jsonl --log data/review/day13_feedback_log.jsonl`
   - `python scripts/run_refresh_cycle.py --adapter-name adapter_v3 --compare-with results/adapter_v2/metrics.json --bundle`

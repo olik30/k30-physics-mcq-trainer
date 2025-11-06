@@ -35,6 +35,43 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 DEFAULT_INPUT = Path("data/filtered/refresh_candidates.jsonl")
 DEFAULT_LOG = Path("data/review/day13_feedback_log.jsonl")
 
+LETTER_LABELS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+
+def index_to_letter(index: Optional[int], options_len: int) -> Optional[str]:
+    if isinstance(index, int) and 0 <= index < options_len and index < len(LETTER_LABELS):
+        return LETTER_LABELS[index]
+    return None
+
+
+def letter_to_index(letter: str, options_len: int) -> Optional[int]:
+    if not letter:
+        return None
+    if options_len <= 0:
+        return None
+    max_letter_index = min(options_len, len(LETTER_LABELS)) - 1
+    if max_letter_index < 0:
+        return None
+    text = letter.strip().upper()
+    if len(text) == 1 and "A" <= text <= LETTER_LABELS[max_letter_index]:
+        idx = ord(text) - ord("A")
+        if idx < options_len:
+            return idx
+    if text.isdigit():
+        value = int(text)
+        if 0 <= value < options_len:
+            return value
+        if 1 <= value <= options_len:
+            return value - 1
+    return None
+
+
+def parse_answer_choice(raw: str, options_len: int) -> Optional[int]:
+    if not raw:
+        return None
+    idx = letter_to_index(raw, options_len)
+    return idx
+
 
 def load_jsonl(path: Path) -> List[Dict[str, object]]:
     records: List[Dict[str, object]] = []
@@ -100,7 +137,13 @@ def render_record(record: Dict[str, object], record_id: str, current_decision: O
     print("=" * 88)
     print(f"ID: {record_id}")
     if current_decision:
-        print(f"Current decision: {current_decision.get('decision')} ({current_decision.get('note', '')})")
+        decision = current_decision.get("decision")
+        note = current_decision.get("note", "")
+        answer_choice = current_decision.get("answer_choice") or current_decision.get("answer")
+        if answer_choice:
+            print(f"Current decision: {decision} (answer={answer_choice}; {note})")
+        else:
+            print(f"Current decision: {decision} ({note})")
     question = str(record.get("question") or "")
     if question:
         print("Question:")
@@ -110,6 +153,10 @@ def render_record(record: Dict[str, object], record_id: str, current_decision: O
         for idx, opt in enumerate(options):
             label = chr(ord("A") + idx)
             print(f"  {label}. {opt}")
+    if isinstance(options, list):
+        model_letter = index_to_letter(record.get("correct_index"), len(options))
+        if model_letter:
+            print(f"Model answer: {model_letter}")
     hint = record.get("hint")
     if hint:
         print("Hint:")
@@ -200,7 +247,8 @@ def interactive_review(
         if not show_reviewed and record_id in log_entries:
             continue
 
-        render_record(record, record_id, log_entries.get(record_id))
+        existing_decision = log_entries.get(record_id)
+        render_record(record, record_id, existing_decision)
 
         while True:
             choice = input(
@@ -217,11 +265,42 @@ def interactive_review(
             if not mapped:
                 print("Unrecognised choice. Please enter a, n, r, s, or q.")
                 continue
-            note = input("Note (optional): ").strip()
+            options = record.get("options") or []
+            options_len = len(options) if isinstance(options, list) else 0
+            model_index = record.get("correct_index")
+            default_index: Optional[int] = None
+            if existing_decision:
+                if isinstance(existing_decision.get("answer_index"), int):
+                    default_index = existing_decision["answer_index"]
+                elif existing_decision.get("answer_choice"):
+                    default_index = letter_to_index(existing_decision["answer_choice"], options_len)
+            if default_index is None and isinstance(model_index, int):
+                default_index = model_index if 0 <= model_index < options_len else None
+            default_letter = index_to_letter(default_index, options_len) if default_index is not None else None
+            while True:
+                prompt_default = default_letter or ("model" if model_index is not None else "none")
+                answer_raw = input(
+                    f"Correct answer? [A-{chr(ord('A') + max(options_len - 1, 0))}] (default: {prompt_default}): "
+                ).strip()
+                if not answer_raw:
+                    answer_index = default_index
+                    break
+                parsed_index = parse_answer_choice(answer_raw, options_len)
+                if parsed_index is not None:
+                    answer_index = parsed_index
+                    break
+                print("Please enter a valid option letter (e.g., A) or digit.")
+            answer_choice = (
+                index_to_letter(answer_index, options_len) if answer_index is not None else None
+            )
+            note = input("Reason / note (optional): ").strip()
             entry = {
                 "record_id": record_id,
                 "decision": mapped,
+                "answer_choice": answer_choice,
+                "answer_index": answer_index,
                 "note": note,
+                "model_choice": index_to_letter(model_index, options_len),
             }
             with log_path.open("a", encoding="utf-8") as stream:
                 json.dump(entry, stream, ensure_ascii=False)

@@ -28,7 +28,8 @@ python scripts/feedback_queue.py review \
   - `r` → reject
   - `s` → skip this item
   - `q` → quit the loop
-- After selecting `a/n/r`, you can enter an optional note; the script appends it to `data/review/day13_feedback_log.jsonl`.
+- After choosing `a/n/r`, the CLI asks you to confirm the correct option. Press **Enter** to accept the model’s choice or type the real answer letter (A–D) to correct it.
+- Then add a short reason/note (optional). Everything is logged to `data/review/day13_feedback_log.jsonl`, including the answer you supplied.
 - Use `--show-reviewed` if you want to revisit items that already have decisions.
 
 > Still want the old behaviour? `list` + `annotate` remain available for ad-hoc use.
@@ -50,8 +51,8 @@ python scripts/feedback_queue.py review \
 ## 6. After feedback
 
 - Decisions feed the next automated loop:
-  1. `needs-work` / `reject` items get regenerated or hand-edited.
-  2. Newly-approved items roll into the training dataset.
+  1. `needs-work` / `reject` entries are held in `data/filtered/refresh_holdback.jsonl` for regeneration.
+  2. Approved items (with your confirmed answer index) are written to `data/filtered/refresh_approved.jsonl` and merged into the next training set.
   3. The evaluation suite (`scripts/eval.py`) is re-run to track progress.
 - No manual editing of JSON files is required; stick to the CLI log unless you’re doing deep fixes.
 
@@ -66,8 +67,8 @@ python scripts/run_refresh_cycle.py \
   --bundle
 ```
 
-This executes: `prepare_refresh` → `auto_generate` → `filter_balance` → (optional) `format_for_sft` → `train_lora` → `eval` → `compare_adapters` → `create_handoff_bundle`.  
-Adjust flags if you want a longer training run (increase `--max-steps`, change `--device-map`, etc.).
+This executes: `prepare_refresh` → `auto_generate` → `filter_balance` → **apply reviewer decisions** → (optional) `format_for_sft` → `train_lora` → `eval` → `compare_adapters` → `create_handoff_bundle`.  
+Only the records you approved (with corrected answers) feed training; everything else stays in the holdback file for another regeneration pass. Adjust flags if you want a longer training run (increase `--max-steps`, change `--device-map`, etc.).
 
 ---
 

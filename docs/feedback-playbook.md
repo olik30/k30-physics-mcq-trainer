@@ -14,33 +14,24 @@ This guide explains how to review generated MCQs once the fully automated Days�
   - `ao`, `topic`, `difficulty`
   - `sources` → links back to the original past-paper part for context.
 
-## 2. Bring an item into view
+## 2. Review & log decisions (interactive)
 
 ```bash
-python scripts/feedback_queue.py list \
+python scripts/feedback_queue.py review \
   --input data/filtered/refresh_candidates.jsonl \
-  --log data/review/day13_feedback_log.jsonl \
-  --limit 5
+  --log data/review/day13_feedback_log.jsonl
 ```
 
-- The CLI prints the first five unreviewed items (skipping anything already logged).
-- Use `--show-reviewed` if you ever need to revisit decisions.
-- Copy the `ID:` value; it’s the key you’ll use when recording feedback (e.g. `AQA/AQA_Paper_1/June_2017_QP/Q02#02.1`).
+- Items are shown one-by-one. For each MCQ, type:
+  - `a` → approve
+  - `n` → needs-work
+  - `r` → reject
+  - `s` → skip this item
+  - `q` → quit the loop
+- After selecting `a/n/r`, you can enter an optional note; the script appends it to `data/review/day13_feedback_log.jsonl`.
+- Use `--show-reviewed` if you want to revisit items that already have decisions.
 
-## 3. Record a decision
-
-```bash
-python scripts/feedback_queue.py annotate \
-  --input data/filtered/refresh_candidates.jsonl \
-  --log data/review/day13_feedback_log.jsonl \
-  --record-id AQA/AQA_Paper_1/June_2017_QP/Q02#02.1 \
-  --decision needs-work \
-  --note "Correct option repeats prompt; regenerate explanation."
-```
-
-- Allowed decisions: `approve`, `reject`, `needs-work`.
-- Notes are optional but strongly encouraged so the automation can respond (e.g. regenerate vs. keep).
-- All entries append to `data/review/day13_feedback_log.jsonl`; no existing rows are overwritten.
+> Still want the old behaviour? `list` + `annotate` remain available for ad-hoc use.
 
 ## 4. What “good” looks like
 
@@ -63,6 +54,20 @@ python scripts/feedback_queue.py annotate \
   2. Newly-approved items roll into the training dataset.
   3. The evaluation suite (`scripts/eval.py`) is re-run to track progress.
 - No manual editing of JSON files is required; stick to the CLI log unless you’re doing deep fixes.
+
+## 7. One-command refresh cycle
+
+Once you’ve logged enough feedback, run the end-to-end automation:
+
+```bash
+python scripts/run_refresh_cycle.py \
+  --adapter-name adapter_v3 \
+  --compare-with results/adapter_v2/metrics.json \
+  --bundle
+```
+
+This executes: `prepare_refresh` → `auto_generate` → `filter_balance` → (optional) `format_for_sft` → `train_lora` → `eval` → `compare_adapters` → `create_handoff_bundle`.  
+Adjust flags if you want a longer training run (increase `--max-steps`, change `--device-map`, etc.).
 
 ---
 

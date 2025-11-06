@@ -39,3 +39,43 @@ adapters:
       train_samples_per_second: 0.063
       train_steps_per_second: 0.063
     val_file: C:\Users\olive\Downloads\Coding\k30-physics-mcq-trainer\data\formatted\val.jsonl
+  adapter_v2:
+    adapter_name: adapter_v2
+    base_model: Qwen/Qwen2.5-0.5B-Instruct
+    eval_metrics: {}
+    finished_at: '2025-11-06T20:15:57.926185+00:00'
+    hyperparameters:
+      bf16: false
+      eval_steps: 1
+      fp16: false
+      gradient_accumulation_steps: 1
+      gradient_checkpointing: false
+      learning_rate: 0.0002
+      logging_steps: 1
+      lora_alpha: 32
+      lora_dropout: 0.05
+      lora_r: 16
+      max_seq_length: 512
+      max_steps: 1
+      num_train_epochs: 3.0
+      per_device_eval_batch_size: 1
+      per_device_train_batch_size: 1
+      save_steps: 1
+      seed: 42
+      warmup_steps: 0
+      weight_decay: 0.0
+    log_path: C:\Users\olive\Downloads\Coding\k30-physics-mcq-trainer\logs\train\adapter_v2.jsonl
+    manifest_path: C:\Users\olive\Downloads\Coding\k30-physics-mcq-trainer\data\formatted\manifest.json
+    output_dir: C:\Users\olive\Downloads\Coding\k30-physics-mcq-trainer\models\adapters\adapter_v2
+    run_name: adapter_v2
+    started_at: '2025-11-06T20:15:40.429692+00:00'
+    train_file: C:\Users\olive\Downloads\Coding\k30-physics-mcq-trainer\data\formatted\train.jsonl
+    train_metrics:
+      epoch: 0.0026109660574412533
+      step: 1
+      total_flos: 1080287358720.0
+      train_loss: 3.425433874130249
+      train_runtime: 16.3948
+      train_samples_per_second: 0.061
+      train_steps_per_second: 0.061
+    val_file: C:\Users\olive\Downloads\Coding\k30-physics-mcq-trainer\data\formatted\val.jsonl

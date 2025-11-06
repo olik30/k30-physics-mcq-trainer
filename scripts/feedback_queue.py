@@ -96,6 +96,34 @@ def wrap_text(text: str, width: int = 88, indent: int = 2) -> str:
     return wrapper.fill(text)
 
 
+def render_record(record: Dict[str, object], record_id: str, current_decision: Optional[Dict[str, object]] = None) -> None:
+    print("=" * 88)
+    print(f"ID: {record_id}")
+    if current_decision:
+        print(f"Current decision: {current_decision.get('decision')} ({current_decision.get('note', '')})")
+    question = str(record.get("question") or "")
+    if question:
+        print("Question:")
+        print(wrap_text(question))
+    options = record.get("options") or []
+    if isinstance(options, list):
+        for idx, opt in enumerate(options):
+            label = chr(ord("A") + idx)
+            print(f"  {label}. {opt}")
+    hint = record.get("hint")
+    if hint:
+        print("Hint:")
+        print(wrap_text(str(hint)))
+    explanation = record.get("explanation")
+    if explanation:
+        print("Explanation:")
+        print(wrap_text(str(explanation)))
+    ao = record.get("ao")
+    topic = record.get("topic")
+    difficulty = record.get("difficulty")
+    print(f"Meta: AO={ao} | Topic={topic} | Difficulty={difficulty}")
+
+
 def list_records(
     dataset_path: Path,
     log_path: Path,
@@ -110,31 +138,7 @@ def list_records(
         decision = log_entries.get(record_id)
         if not show_reviewed and decision:
             continue
-        print("=" * 88)
-        print(f"ID: {record_id}")
-        if decision:
-            print(f"Current decision: {decision.get('decision')} ({decision.get('note', '')})")
-        question = str(record.get("question") or "")
-        if question:
-            print("Question:")
-            print(wrap_text(question))
-        options = record.get("options") or []
-        if isinstance(options, list):
-            for idx, opt in enumerate(options):
-                label = chr(ord("A") + idx)
-                print(f"  {label}. {opt}")
-        hint = record.get("hint")
-        if hint:
-            print("Hint:")
-            print(wrap_text(str(hint)))
-        explanation = record.get("explanation")
-        if explanation:
-            print("Explanation:")
-            print(wrap_text(str(explanation)))
-        ao = record.get("ao")
-        topic = record.get("topic")
-        difficulty = record.get("difficulty")
-        print(f"Meta: AO={ao} | Topic={topic} | Difficulty={difficulty}")
+        render_record(record, record_id, decision)
         shown += 1
         if shown >= limit:
             break
@@ -171,6 +175,68 @@ def annotate_record(
     print(f"Recorded decision for {record_id}: {decision}")
 
 
+def interactive_review(
+    dataset_path: Path,
+    log_path: Path,
+    show_reviewed: bool,
+) -> None:
+    records = load_jsonl(dataset_path)
+    log_entries = load_log(log_path)
+    ensure_log(log_path)
+
+    decision_map = {
+        "a": "approve",
+        "approve": "approve",
+        "n": "needs-work",
+        "needs": "needs-work",
+        "needs-work": "needs-work",
+        "r": "reject",
+        "reject": "reject",
+    }
+
+    reviewed_count = 0
+    for record in records:
+        record_id = compute_record_id(record)
+        if not show_reviewed and record_id in log_entries:
+            continue
+
+        render_record(record, record_id, log_entries.get(record_id))
+
+        while True:
+            choice = input(
+                "Decision [a=approve, n=needs-work, r=reject, s=skip, q=quit]: "
+            ).strip().lower()
+            if not choice:
+                continue
+            if choice in {"q", "quit"}:
+                print("Stopping review loop.")
+                return
+            if choice in {"s", "skip"}:
+                break
+            mapped = decision_map.get(choice)
+            if not mapped:
+                print("Unrecognised choice. Please enter a, n, r, s, or q.")
+                continue
+            note = input("Note (optional): ").strip()
+            entry = {
+                "record_id": record_id,
+                "decision": mapped,
+                "note": note,
+            }
+            with log_path.open("a", encoding="utf-8") as stream:
+                json.dump(entry, stream, ensure_ascii=False)
+                stream.write("\n")
+            log_entries[record_id] = entry
+            reviewed_count += 1
+            print(f"Recorded decision for {record_id}: {mapped}")
+            break
+
+    if reviewed_count == 0:
+        print("No records required review (all already decided or dataset empty).")
+    else:
+        print(f"Completed {reviewed_count} reviews.")
+
+
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Feedback queue helper")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -180,6 +246,15 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     list_parser.add_argument("--log", type=Path, default=DEFAULT_LOG)
     list_parser.add_argument("--limit", type=int, default=5)
     list_parser.add_argument(
+        "--show-reviewed",
+        action="store_true",
+        help="Include items that already have decisions logged",
+    )
+
+    review_parser = subparsers.add_parser("review", help="Interactively review MCQs and record decisions")
+    review_parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
+    review_parser.add_argument("--log", type=Path, default=DEFAULT_LOG)
+    review_parser.add_argument(
         "--show-reviewed",
         action="store_true",
         help="Include items that already have decisions logged",
@@ -206,6 +281,12 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
             dataset_path=args.input,
             log_path=args.log,
             limit=args.limit,
+            show_reviewed=args.show_reviewed,
+        )
+    elif args.command == "review":
+        interactive_review(
+            dataset_path=args.input,
+            log_path=args.log,
             show_reviewed=args.show_reviewed,
         )
     elif args.command == "annotate":

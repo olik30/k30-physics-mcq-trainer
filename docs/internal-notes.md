@@ -12,6 +12,7 @@ Quick daily snapshot (non-technical):
 - Day 11: Trained the first local adapter (tiny sanity run) and captured logs/config so the full GPU run can pick up where we left off.
 - Day 12: Ran the evaluation harness on the adapter, logging JSON validity (~84%), schema pass rate (~69%), and highlighting the zero-answer-match issue plus AO skew that we need to fix before a serious rollout.
 - Day 13: Auto-selected 46 weak MCQs, regenerated 40 clean drafts, and stood up the feedback CLI + playbook so humans can triage them after Day 14.
+- Day 14: Trained adapter_v2, benchmarked it against adapter_v1 (slight JSON/schema gains), and packaged every artefact into `handoff/day14_artifacts/` for the post-automation review team.
 
 ==============================================================================================================
 
@@ -101,3 +102,9 @@ Day 13 recap:
 - Ran `scripts/filter_balance.py` on the drafts so `data/filtered/refresh_candidates.jsonl` holds 40 ready-to-review MCQs with zero warnings; coverage logged to `reports/day13_refresh.{json,md}`.
 - Built `scripts/feedback_queue.py` so reviewers can list unapproved MCQs and log `approve/reject/needs-work` decisions into `data/review/day13_feedback_log.jsonl`; seeded one test entry to verify the flow.
 - Documented the human loop in `docs/feedback-playbook.md` (CLI commands, quality bar, decision criteria) and updated the workflow docs to show where the log fits into the post-Day 14 review cycle.
+
+Day 14 recap:
+- Trained a second adapter via `scripts/train_lora.py` (`adapter_v2`, CPU one-step sanity pass), logging to `logs/train/adapter_v2.jsonl` and appending metadata to `config/adapters.yaml`.
+- Evaluated adapter_v2 with `scripts/eval.py` (results in `results/adapter_v2/`), then compared both adapters using `scripts/compare_adapters.py`, which shows ~+2% JSON-valid and ~+6% schema-valid but answer_match still at 0%.
+- Collected all downstream artefacts (refresh candidates, metrics, summaries, adapters, feedback log) using `scripts/create_handoff_bundle.py`; the bundle plus manifest lives in `handoff/day14_artifacts/`.
+- Updated `docs/feedback-playbook.md` and the workflow docs to note that the review CLI + bundle are ready for the human QA phase; nothing else blocks post-Day 14 handoff.

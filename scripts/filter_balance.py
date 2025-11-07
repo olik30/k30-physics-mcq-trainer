@@ -177,6 +177,10 @@ def detect_duplicates(processed: List[ProcessedRecord]) -> None:
     provenance_index: Dict[Tuple[str, str, str], List[int]] = collections.defaultdict(list)
 
     for idx, record in enumerate(processed):
+        metadata = record.cleaned.get("metadata") or {}
+        if metadata.get("variant_id"):
+            # Allow multiple variants of the same question without duplicate penalties
+            continue
         question = str(record.cleaned.get("question") or "").lower()
         if question:
             question_index[question].append(idx)

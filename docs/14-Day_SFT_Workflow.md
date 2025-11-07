@@ -141,14 +141,14 @@ NOTE: MARKDOWN PROGRESS + WHAT'S IMPLEMENENTED + DELIVERABLES WHEN YOU FINISH A 
 - Assembled `handoff/day14_artifacts/` via `scripts/create_handoff_bundle.py`, bundling adapters, metrics, refresh candidates, feedback log, and the reviewer playbook with a manifest/README for the QA team.
 
 **Post-Day 14 — Human QA & iterative improvement (starts after automation ends)**
-- Use the bundled feedback tool to review flagged MCQs, confirm the correct option (override the model’s guess if needed), and capture a short note; every decision lands in `data/review/day13_feedback_log.jsonl`.
-- `run_refresh_cycle.py` now reads that log, writes approved items + corrected answers to `data/filtered/refresh_approved.jsonl`, and parks all `needs-work` / `reject` / pending rows in `data/filtered/refresh_holdback.jsonl` for the next regeneration pass.
-- The updated reviewer prints the original prompt, mark-scheme note, and direct paths to the question/mark-scheme PDFs so decisions can be made without hunting through folders.
+- Use the new variant reviewer to compare five drafts per question, pick a favourite, and mark each variant `accept`/`reject`; decisions land in `data/review/variant_choices.jsonl`.
+- `run_refresh_cycle.py` ingests that log, writes accepted variants to `data/filtered/refresh_accept.jsonl` (preferred ones receive extra weight), and places rejected/pending variants into `data/filtered/refresh_reject.jsonl` for regeneration.
+- Once wording quality is reliable, switch to the answer-focused reviewer (`feedback_queue.py review …`) to correct answer indices and rationale logs (`data/review/day13_feedback_log.jsonl`).
 - Inspect evaluation dashboards, choose the preferred adapter checkpoint, and note follow-up training requests; no deployment or rollout tasks are required at this stage.
 - Repeat the generate → filter → review → retrain loop as often as needed—the tooling handles retraining once you’re done reviewing.
 - Shortcut commands:
-  - `python scripts/feedback_queue.py review --input data/filtered/refresh_candidates.jsonl --log data/review/day13_feedback_log.jsonl`
-  - `python scripts/run_refresh_cycle.py --adapter-name adapter_v3 --compare-with results/adapter_v2/metrics.json --bundle`
+  - `python scripts/feedback_queue.py variants --input data/filtered/refresh_candidates.jsonl --log data/review/variant_choices.jsonl`
+  - `python scripts/run_refresh_cycle.py --adapter-name adapter_v3 --compare-with results/adapter_v2/metrics.json --variants-per-source 5 --bundle`
 
 ---
 

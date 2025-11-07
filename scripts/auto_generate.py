@@ -217,7 +217,18 @@ def main() -> None:
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--model", default="qwen2.5:7b-instruct")
-    parser.add_argument("--limit", type=int, default=50)
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=50,
+        help="Maximum number of question parts to process",
+    )
+    parser.add_argument(
+        "--variants-per-source",
+        type=int,
+        default=1,
+        help="Number of MCQ variants to generate for each question part",
+    )
     parser.add_argument(
         "--allow-existing",
         action="store_true",
@@ -268,71 +279,95 @@ def main() -> None:
     output_records: List[Dict[str, object]] = []
     log_entries: List[Dict[str, object]] = []
 
-    seen_ids: Set[Tuple[str, str]] = set()
+    max_questions = max(args.limit, 0)
+    variants = max(args.variants_per_source, 1)
+
+    processed_questions = 0
     for entry in entries:
-        key = (entry.get("question_id"), entry.get("part_code"))
-        if key in seen_ids:
-            continue
-        seen_ids.add(key)
-        if len(output_records) >= args.limit:
+        if max_questions and processed_questions >= max_questions:
             break
+
+        processed_questions += 1
         prompt_text = build_user_prompt(entry)
-        full_prompt = (
-            f"<|system|>\n{SYSTEM_PROMPT}\n<|assistant|>\n"  # start with system guidance
-            f"<|user|>\n{prompt_text}\n"
-        )
-        try:
-            raw_response = run_ollama(full_prompt, args.model)
+
+        for variant_index in range(variants):
+            full_prompt = (
+                f"<|system|>\n{SYSTEM_PROMPT}\n<|assistant|>\n"
+                f"<|user|>\n{prompt_text}\n"
+            )
+            raw_response = ""
             try:
-                data = json.loads(raw_response)
-            except json.JSONDecodeError:
-                start = raw_response.find("{")
-                end = raw_response.rfind("}")
-                if start != -1 and end != -1 and end > start:
-                    data = json.loads(raw_response[start:end + 1])
-                else:
-                    raise
-            data = sanitise_record(data)
-            validation_errors = validate_record(data)
-            if validation_errors:
-                raise ValueError("; ".join(validation_errors))
-        except Exception as exc:
-            logging.error("Generation failed for %s/%s: %s", entry.get("question_id"), entry.get("part_code"), exc)
+                raw_response = run_ollama(full_prompt, args.model)
+                try:
+                    data = json.loads(raw_response)
+                except json.JSONDecodeError:
+                    start = raw_response.find("{")
+                    end = raw_response.rfind("}")
+                    if start != -1 and end != -1 and end > start:
+                        data = json.loads(raw_response[start:end + 1])
+                    else:
+                        raise
+                data = sanitise_record(data)
+                validation_errors = validate_record(data)
+                if validation_errors:
+                    raise ValueError("; ".join(validation_errors))
+            except Exception as exc:
+                logging.error(
+                    "Generation failed for %s/%s (variant %s): %s",
+                    entry.get("question_id"),
+                    entry.get("part_code"),
+                    variant_index + 1,
+                    exc,
+                )
+                log_entries.append({
+                    "question_id": entry.get("question_id"),
+                    "part_code": entry.get("part_code"),
+                    "variant_id": variant_index + 1,
+                    "status": "error",
+                    "error": str(exc),
+                    "prompt": prompt_text,
+                    "raw": raw_response or None,
+                })
+                continue
+
+            data["variant_id"] = variant_index + 1
+            data.setdefault("metadata", {})
+            metadata = data["metadata"] or {}
+            metadata.update({
+                "board": metadata.get("board") or "AQA",
+                "paper": entry.get("paper"),
+                "session": entry.get("session"),
+                "source": "model_generated",
+                "status": metadata.get("status") or "draft",
+                "variant_id": variant_index + 1,
+                "variants_per_source": variants,
+                "variant_group_id": f"{entry.get('question_id')}#{entry.get('part_code')}",
+            })
+            data["metadata"] = metadata
+            data["variant_group_id"] = metadata["variant_group_id"]
+            data["sources"] = [
+                {
+                    "type": "question_part",
+                    "question_id": entry.get("question_id"),
+                    "part_code": entry.get("part_code"),
+                },
+                {
+                    "type": "mark_scheme",
+                    "question_id": entry.get("question_id"),
+                    "part_code": entry.get("part_code"),
+                },
+            ]
+
+            output_records.append(data)
             log_entries.append({
                 "question_id": entry.get("question_id"),
                 "part_code": entry.get("part_code"),
-                "status": "error",
-                "error": str(exc),
-                "prompt": prompt_text,
-                "raw": raw_response if "raw_response" in locals() else None,
+                "variant_id": variant_index + 1,
+                "status": "ok",
             })
-            continue
 
-        data["sources"] = [
-            {
-                "type": "question_part",
-                "question_id": entry.get("question_id"),
-                "part_code": entry.get("part_code"),
-            },
-            {
-                "type": "mark_scheme",
-                "question_id": entry.get("question_id"),
-                "part_code": entry.get("part_code"),
-            },
-        ]
-        data["metadata"] = {
-            "board": "AQA",
-            "paper": entry.get("paper"),
-            "session": entry.get("session"),
-            "source": "model_generated",
-            "status": "draft",
-        }
-        output_records.append(data)
-        log_entries.append({
-            "question_id": entry.get("question_id"),
-            "part_code": entry.get("part_code"),
-            "status": "ok",
-        })
+    if not output_records:
+        logging.warning("No drafts were generated.")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8") as stream:

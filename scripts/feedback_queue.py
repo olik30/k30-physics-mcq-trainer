@@ -28,13 +28,15 @@ import argparse
 import json
 import sys
 import textwrap
+from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 
 DEFAULT_INPUT = Path("data/filtered/refresh_candidates.jsonl")
 DEFAULT_LOG = Path("data/review/day13_feedback_log.jsonl")
+DEFAULT_VARIANT_LOG = Path("data/review/variant_choices.jsonl")
 DEFAULT_QUESTIONS_INDEX = Path("data/parsed/questions.jsonl")
 DEFAULT_REFRESH_INDEX = Path("data/parsed/refresh_sources.jsonl")
 
@@ -238,6 +240,59 @@ def get_source_context(question_id: Optional[str], part_code: Optional[str]) -> 
     # Fallback: return any context for question if part missing.
     return next(iter(part_map.values()))
 
+
+def determine_variant_group(record: Dict[str, object]) -> Optional[str]:
+    metadata = record.get("metadata") or {}
+    group_id = metadata.get("variant_group_id")
+    if group_id:
+        return str(group_id)
+    question_id, part_code = extract_source_keys(record)
+    if not question_id:
+        return None
+    return f"{question_id}#{part_code or ''}"
+
+
+def resolve_variant_id(record: Dict[str, object], fallback: int) -> int:
+    metadata = record.get("metadata") or {}
+    variant_id = record.get("variant_id") or metadata.get("variant_id")
+    if isinstance(variant_id, int):
+        return variant_id
+    try:
+        return int(str(variant_id))
+    except (TypeError, ValueError):
+        return fallback
+
+
+def group_variant_records(records: Sequence[Dict[str, object]]) -> List[Dict[str, Any]]:
+    grouped: Dict[str, Dict[str, Any]] = {}
+    order: List[str] = []
+    for record in records:
+        group_id = determine_variant_group(record)
+        if not group_id:
+            continue
+        question_id, part_code = extract_source_keys(record)
+        group = grouped.setdefault(
+            group_id,
+            {
+                "group_id": group_id,
+                "question_id": question_id,
+                "part_code": part_code,
+                "records": [],
+            },
+        )
+        variant_index = resolve_variant_id(record, len(group["records"]) + 1)
+        group["records"].append({"variant_id": variant_index, "record": record})
+        if group_id not in order:
+            order.append(group_id)
+
+    grouped_list: List[Dict[str, Any]] = []
+    for group_id in order:
+        group = grouped[group_id]
+        group_records = sorted(group["records"], key=lambda item: item["variant_id"])
+        group["records"] = group_records
+        grouped_list.append(group)
+    return grouped_list
+
 def index_to_letter(index: Optional[int], options_len: int) -> Optional[str]:
     if isinstance(index, int) and 0 <= index < options_len and index < len(LETTER_LABELS):
         return LETTER_LABELS[index]
@@ -310,6 +365,30 @@ def load_log(path: Path) -> Dict[str, Dict[str, object]]:
             if isinstance(record_id, str):
                 decisions[record_id] = entry
     return decisions
+
+
+def load_variant_log(path: Path) -> Dict[str, Dict[str, object]]:
+    if not path.exists():
+        return {}
+    entries: Dict[str, Dict[str, object]] = {}
+    with path.open("r", encoding="utf-8") as stream:
+        for line in stream:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            group_id = str(entry.get("variant_group_id") or "")
+            if not group_id:
+                question_id = entry.get("question_id")
+                part_code = entry.get("part_code")
+                if not question_id:
+                    continue
+                group_id = f"{question_id}#{part_code or ''}"
+            entries[group_id] = entry
+    return entries
 
 
 def compute_record_id(record: Dict[str, object]) -> str:
@@ -410,6 +489,114 @@ def render_record(
                 safe_print(f"  - {asset}")
             if len(source_context.assets) > 5:
                 safe_print(f"  ... ({len(source_context.assets) - 5} more)")
+
+
+def prompt_preferred_variant(total_variants: int) -> Tuple[Optional[int], bool]:
+    while True:
+        choice = input(
+            f"Preferred variant [1-{total_variants}, none=n, q=quit]: "
+        ).strip().lower()
+        if choice in {"", "n", "none"}:
+            return None, False
+        if choice in {"q", "quit"}:
+            return None, True
+        if choice.isdigit():
+            value = int(choice)
+            if 1 <= value <= total_variants:
+                return value, False
+        safe_print("Please enter a number within range, 'n' for none, or 'q' to quit.")
+
+
+def prompt_variant_decision(variant_id: int) -> Tuple[Optional[str], bool]:
+    while True:
+        choice = input(
+            f"Variant {variant_id} decision [a=accept, r=reject, q=quit]: "
+        ).strip().lower()
+        if choice in {"a", "accept"}:
+            return "accept", False
+        if choice in {"r", "reject"}:
+            return "reject", False
+        if choice in {"q", "quit"}:
+            return None, True
+        safe_print("Please enter 'a', 'r', or 'q'.")
+
+
+def variant_review(
+    dataset_path: Path,
+    log_path: Path,
+    show_reviewed: bool,
+) -> None:
+    records = load_jsonl(dataset_path)
+    groups = group_variant_records(records)
+    if not groups:
+        safe_print("No variant groups found in dataset.")
+        return
+
+    ensure_log(log_path)
+    log_entries = load_variant_log(log_path)
+    reviewed = 0
+
+    for group in groups:
+        group_id = group["group_id"]
+        if not show_reviewed and group_id in log_entries:
+            continue
+
+        question_id = group.get("question_id")
+        part_code = group.get("part_code")
+        source_context = get_source_context(question_id, part_code)
+
+        safe_print("=" * 88)
+        safe_print(f"Variant group: {group_id}")
+        for item in group["records"]:
+            variant_id = item["variant_id"]
+            record = item["record"]
+            safe_print("-" * 88)
+            safe_print(f"Variant {variant_id}")
+            render_record(record, compute_record_id(record), source_context=source_context)
+
+        preferred, stop_now = prompt_preferred_variant(len(group["records"]))
+        if stop_now:
+            safe_print("Stopping review loop.")
+            break
+
+        variant_entries: List[Dict[str, object]] = []
+        stop_requested = False
+        for item in group["records"]:
+            variant_id = item["variant_id"]
+            decision, quit_now = prompt_variant_decision(variant_id)
+            if quit_now:
+                safe_print("Stopping review loop.")
+                stop_requested = True
+                break
+            note = input("Note (why accepted/rejected / why not preferred) [optional]: ").strip()
+            variant_entries.append({
+                "variant_id": variant_id,
+                "decision": decision,
+                "note": note,
+                "is_preferred": bool(preferred and variant_id == preferred),
+            })
+
+        if stop_requested:
+            break
+
+        entry = {
+            "variant_group_id": group_id,
+            "question_id": question_id,
+            "part_code": part_code,
+            "preferred_variant": preferred if isinstance(preferred, int) else None,
+            "variants": variant_entries,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        with log_path.open("a", encoding="utf-8") as stream:
+            json.dump(entry, stream, ensure_ascii=False)
+            stream.write("\n")
+        log_entries[group_id] = entry
+        reviewed += 1
+
+    if reviewed:
+        safe_print(f"Completed {reviewed} variant reviews.")
+    else:
+        safe_print("No variant groups were reviewed (already completed or skipped).")
 
 
 def list_records(
@@ -590,6 +777,18 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="Include items that already have decisions logged",
     )
 
+    variant_parser = subparsers.add_parser(
+        "variants",
+        help="Review multiple variants of each MCQ and pick the preferred ones",
+    )
+    variant_parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
+    variant_parser.add_argument("--log", type=Path, default=DEFAULT_VARIANT_LOG)
+    variant_parser.add_argument(
+        "--show-reviewed",
+        action="store_true",
+        help="Include variant groups that already have decisions logged",
+    )
+
     review_parser = subparsers.add_parser("review", help="Interactively review MCQs and record decisions")
     review_parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
     review_parser.add_argument("--log", type=Path, default=DEFAULT_LOG)
@@ -624,6 +823,12 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         )
     elif args.command == "review":
         interactive_review(
+            dataset_path=args.input,
+            log_path=args.log,
+            show_reviewed=args.show_reviewed,
+        )
+    elif args.command == "variants":
+        variant_review(
             dataset_path=args.input,
             log_path=args.log,
             show_reviewed=args.show_reviewed,

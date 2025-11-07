@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 try:  # pragma: no cover
     from . import (
@@ -38,6 +38,9 @@ DEFAULT_REFRESH_DRAFTS = Path("data/parsed/refresh_drafts.jsonl")
 DEFAULT_REFRESH_CANDIDATES = Path("data/filtered/refresh_candidates.jsonl")
 DEFAULT_APPROVED_REFRESH = Path("data/filtered/refresh_approved.jsonl")
 DEFAULT_HOLDBACK_REFRESH = Path("data/filtered/refresh_holdback.jsonl")
+DEFAULT_VARIANT_ACCEPT = Path("data/filtered/refresh_accept.jsonl")
+DEFAULT_VARIANT_REJECT = Path("data/filtered/refresh_reject.jsonl")
+DEFAULT_VARIANT_LOG = Path("data/review/variant_choices.jsonl")
 DEFAULT_FEEDBACK_LOG = Path("data/review/day13_feedback_log.jsonl")
 DEFAULT_SEED_DATA = Path("data/filtered/seed_train.filtered.jsonl")
 
@@ -85,6 +88,24 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         type=Path,
         default=DEFAULT_HOLDBACK_REFRESH,
         help="Output file for items that need regeneration (needs-work/reject/unreviewed)",
+    )
+    parser.add_argument(
+        "--variant-accept",
+        type=Path,
+        default=DEFAULT_VARIANT_ACCEPT,
+        help="Output file for accepted variants (variant review mode)",
+    )
+    parser.add_argument(
+        "--variant-reject",
+        type=Path,
+        default=DEFAULT_VARIANT_REJECT,
+        help="Output file for rejected/pending variants",
+    )
+    parser.add_argument(
+        "--variant-log",
+        type=Path,
+        default=DEFAULT_VARIANT_LOG,
+        help="JSONL log of variant review decisions",
     )
     parser.add_argument(
         "--feedback-log",
@@ -147,6 +168,12 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         type=int,
         default=60,
         help="Max drafts to generate per cycle",
+    )
+    parser.add_argument(
+        "--variants-per-source",
+        type=int,
+        default=1,
+        help="Number of MCQ variants to generate per question part",
     )
     return parser.parse_args(argv)
 
@@ -242,6 +269,32 @@ def load_feedback(log_path: Path) -> Dict[str, Dict[str, object]]:
     return entries
 
 
+def load_variant_choices(log_path: Path) -> Dict[str, Dict[str, Any]]:
+    entries: Dict[str, Dict[str, Any]] = {}
+    for entry in load_jsonl(log_path):
+        group_id = entry.get("variant_group_id")
+        if not group_id:
+            question_id = entry.get("question_id")
+            part_code = entry.get("part_code")
+            if not question_id:
+                continue
+            group_id = f"{question_id}#{part_code or ''}"
+        variants_map: Dict[int, Dict[str, Any]] = {}
+        for variant in entry.get("variants") or []:
+            variant_id = variant.get("variant_id")
+            try:
+                variant_id_int = int(variant_id)
+            except (TypeError, ValueError):
+                continue
+            variants_map[variant_id_int] = variant
+        entries[str(group_id)] = {
+            "preferred": entry.get("preferred_variant"),
+            "variants": variants_map,
+            "raw": entry,
+        }
+    return entries
+
+
 def apply_review_feedback(
     refresh_candidates: Path,
     feedback_log: Path,
@@ -317,6 +370,98 @@ def apply_review_feedback(
     return stats
 
 
+def apply_variant_choices(
+    refresh_candidates: Path,
+    variant_log: Path,
+    accept_output: Path,
+    reject_output: Path,
+    choices: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> Dict[str, int]:
+    records = load_jsonl(refresh_candidates)
+    if choices is None:
+        choices = load_variant_choices(variant_log)
+
+    accepted: List[Dict[str, object]] = []
+    rejected: List[Dict[str, object]] = []
+
+    stats = {
+        "total": len(records),
+        "accepted": 0,
+        "rejected": 0,
+        "pending": 0,
+        "preferred": 0,
+    }
+
+    for record in records:
+        metadata = dict(record.get("metadata") or {})
+        group_id = metadata.get("variant_group_id")
+        if not group_id:
+            sources = record.get("sources") or []
+            question_id = ""
+            part_code = ""
+            for source in sources:
+                if isinstance(source, dict) and source.get("type") == "question_part":
+                    question_id = str(source.get("question_id") or "")
+                    part_code = str(source.get("part_code") or "")
+                    break
+            if question_id:
+                group_id = f"{question_id}#{part_code or ''}"
+                metadata["variant_group_id"] = group_id
+        variant_id = metadata.get("variant_id") or record.get("variant_id")
+        try:
+            variant_id_int = int(variant_id)
+        except (TypeError, ValueError):
+            variant_id_int = None
+
+        choice_entry = choices.get(str(group_id or "")) if group_id else None
+        variant_info = None
+        if choice_entry and variant_id_int is not None:
+            variant_info = choice_entry["variants"].get(variant_id_int)
+
+        if not variant_info:
+            rejected.append(record)
+            stats["pending"] += 1
+            continue
+
+        decision = str(variant_info.get("decision") or "").lower()
+        note = variant_info.get("note") or ""
+        is_preferred = bool(variant_info.get("is_preferred"))
+
+        review_meta = {
+            "decision": decision,
+            "note": note,
+            "is_preferred": is_preferred,
+        }
+        if is_preferred:
+            review_meta["weight"] = 2.0
+            stats["preferred"] += 1
+
+        metadata.setdefault("review", {}).update(review_meta)
+        record["metadata"] = metadata
+
+        if decision == "accept":
+            accepted.append(record)
+            stats["accepted"] += 1
+        elif decision == "reject":
+            rejected.append(record)
+            stats["rejected"] += 1
+        else:
+            rejected.append(record)
+            stats["pending"] += 1
+
+    if accepted:
+        write_jsonl(accept_output, accepted)
+    elif accept_output.exists():
+        accept_output.unlink()
+
+    if rejected:
+        write_jsonl(reject_output, rejected)
+    elif reject_output.exists():
+        reject_output.unlink()
+
+    return stats
+
+
 def run_refresh_cycle(args: argparse.Namespace) -> None:
     print("Step 1/8: prepare_refresh.py")
     summary_json = Path("results") / f"{args.adapter_name}_refresh_summary.json"
@@ -355,6 +500,10 @@ def run_refresh_cycle(args: argparse.Namespace) -> None:
         str(args.auto_generate_limit),
         "--allow-existing",
     ]
+    auto_generate_args.extend([
+        "--variants-per-source",
+        str(max(args.variants_per_source, 1)),
+    ])
     auto_generate.main(auto_generate_args)
 
     print("Step 3/8: filter_balance.py")
@@ -374,23 +523,48 @@ def run_refresh_cycle(args: argparse.Namespace) -> None:
     filter_balance.main(filter_args)
 
     print("Step 4/8: apply reviewer decisions")
-    stats = apply_review_feedback(
-        args.refresh_candidates,
-        args.feedback_log,
-        args.approved_refresh,
-        args.holdback_refresh,
-    )
-    print(
-        f"Applied review log: {stats['approved']} approved, "
-        f"{stats['needs_work']} needs-work, {stats['rejected']} rejected, "
-        f"{stats['pending']} pending."
-    )
+    variant_choices = load_variant_choices(args.variant_log) if args.variant_log else {}
+
+    use_variant_flow = bool(variant_choices)
+    if use_variant_flow:
+        stats = apply_variant_choices(
+            args.refresh_candidates,
+            args.variant_log,
+            args.variant_accept,
+            args.variant_reject,
+            choices=variant_choices,
+        )
+        accepted_dataset = args.variant_accept
+        holdback_dataset = args.variant_reject
+        accepted_count = stats.get("accepted", 0)
+        pending_count = stats.get("pending", 0)
+        print(
+            f"Variant review applied: {stats['accepted']} accepted, "
+            f"{stats['rejected']} rejected, {stats['pending']} pending, "
+            f"{stats['preferred']} preferred."
+        )
+    else:
+        stats = apply_review_feedback(
+            args.refresh_candidates,
+            args.feedback_log,
+            args.approved_refresh,
+            args.holdback_refresh,
+        )
+        accepted_dataset = args.approved_refresh
+        holdback_dataset = args.holdback_refresh
+        accepted_count = stats.get("approved", 0)
+        pending_count = stats.get("pending", 0)
+        print(
+            f"Applied review log: {stats['approved']} approved, "
+            f"{stats['needs_work']} needs-work, {stats['rejected']} rejected, "
+            f"{stats['pending']} pending."
+        )
 
     if not args.skip_format:
         print("Step 5/8: format_for_sft.py")
         inputs: List[str] = [str(args.seed_data)]
-        if stats["approved"] > 0:
-            inputs.append(str(args.approved_refresh))
+        if accepted_count > 0:
+            inputs.append(str(accepted_dataset))
         format_args: List[str] = ["--inputs", *inputs, "--manifest", str(args.formatted_manifest)]
         format_args.extend(
             [
@@ -482,9 +656,9 @@ def run_refresh_cycle(args: argparse.Namespace) -> None:
         print("Creating handoff bundle...")
         default_paths = [
             str(args.refresh_candidates),
-            str(args.approved_refresh),
-            str(args.holdback_refresh),
-            str(args.feedback_log),
+            str(accepted_dataset),
+            str(holdback_dataset),
+            str(args.variant_log if use_variant_flow else args.feedback_log),
             str(eval_output / "metrics.json"),
             str(eval_output / "samples.jsonl"),
             "results/adapter_comparison.json",

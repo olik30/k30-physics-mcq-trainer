@@ -57,7 +57,7 @@ NUMBER_RE = re.compile(r"-?\d+(?:\.\d+)?(?:\s*x\s*10\^[+-]?\d+)?")
 
 DEFAULT_INPUT = Path("data/parsed/questions.jsonl")
 DEFAULT_OUTPUT = Path("data/parsed/auto_drafts.jsonl")
-DEFAULT_LOG_DIR = Path("logs/auto_generate")
+DEFAULT_LOG_DIR = Path("artifacts/logs/auto_generate")
 SEED_TRAIN_PATH = Path("data/parsed/seed_train.jsonl")
 SEED_DRAFTS_PATH = Path("data/parsed/seed_drafts.jsonl")
 

@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import List, Optional, Sequence
 
 
-DEFAULT_OUTPUT_DIR = Path("handoff/day14_artifacts")
+DEFAULT_OUTPUT_DIR = Path("artifacts/handoff/day14_artifacts")
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:

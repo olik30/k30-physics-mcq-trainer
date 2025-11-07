@@ -5,7 +5,7 @@ applies lightweight heuristics to confirm chart presence, merges related vector
 clips emitted by `scripts/extract_pdf.py` into per-page composites, converts the
 image into structured features (axis score, line density, chart-type guess,
 sampled keypoints), and writes the metadata to `data/graph_analysis/`. Each
-run produces a timestamped log (`logs/graph_analysis/`) summarising successes,
+run produces a timestamped log (`artifacts/logs/graph_analysis/`) summarising successes,
 warnings, and errors. Full-page fallback renders are only analysed when no
 vector/embedded clips are available, keeping the focus on actual diagrams.
 
@@ -46,7 +46,7 @@ MAX_ANALYSIS_DIM = 1800
 
 DEFAULT_IMAGE_ROOT = Path("data/images")
 DEFAULT_OUTPUT_ROOT = Path("data/graph_analysis")
-DEFAULT_LOG_DIR = Path("logs/graph_analysis")
+DEFAULT_LOG_DIR = Path("artifacts/logs/graph_analysis")
 IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff")
 EMBEDDED_PATTERN = re.compile(r"page_(\d{3})_img_(\d{2})", re.IGNORECASE)
 VECTOR_PATTERN = re.compile(r"page_(\d{3})_vector_(\d{2})", re.IGNORECASE)

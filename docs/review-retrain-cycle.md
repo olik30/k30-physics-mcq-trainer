@@ -64,7 +64,8 @@ When the wording and hints look right, switch to the “Answer Review” tab ins
 - `data/review/variant_choices.jsonl` stores every decision you make.
 - `data/filtered/refresh_accept.jsonl` keeps the variants you approved (preferred ones are weighted more).
 - `data/filtered/refresh_reject.jsonl` holds the variants you rejected or skipped so they can be regenerated next round.
-- `models/adapters/<name>/` and `results/<name>/` contain the newly trained adapter and its evaluation reports.
+- `data/eval/eval_set.jsonl` is the fixed 300-question evaluation deck every run uses for comparable metrics.
+- `models/adapters/<name>/` and `artifacts/results/<name>/` contain the newly trained adapter and its evaluation reports.
 
 That’s all—work entirely inside the reviewer: review the variants, press the sidebar button, and the system takes care of the rest.
 

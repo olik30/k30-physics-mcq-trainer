@@ -10,8 +10,8 @@ Example usage:
     python scripts/filter_balance.py \
         --input data/parsed/seed_train.jsonl \
         --output data/filtered/seed_train.filtered.jsonl \
-        --report reports/day9_seed_train.json \
-        --coverage-report reports/day9_seed_train.md \
+        --report artifacts/reports/day9_seed_train.json \
+        --coverage-report artifacts/reports/day9_seed_train.md \
         --emit-flagged data/review/day9_seed_train_flagged.jsonl
 
 Use ``--strict`` if you want warnings (e.g. generic topic tags) to become

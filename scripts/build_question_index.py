@@ -5,7 +5,7 @@ This utility ingests ``data/parsed/questions.jsonl`` (written by
 and writes the results into ``data/index/questions.db``. The index lets later
 pipelines issue fast lookups by board/paper/session, question code, or asset
 paths without re-reading the JSONL each time. A run log is emitted to
-``logs/index/`` for traceability.
+``artifacts/logs/index/`` for traceability.
 
 Example:
 
@@ -32,7 +32,7 @@ from typing import Dict, Iterable, Iterator, List, Optional, Sequence
 
 DEFAULT_INPUT = Path("data/parsed/questions.jsonl")
 DEFAULT_DATABASE = Path("data/index/questions.db")
-DEFAULT_LOG_DIR = Path("logs/index")
+DEFAULT_LOG_DIR = Path("artifacts/logs/index")
 
 
 def configure_logging(log_dir: Path) -> Path:

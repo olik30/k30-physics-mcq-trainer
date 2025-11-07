@@ -8,10 +8,10 @@ from pathlib import Path
 from typing import Dict, Optional, Sequence
 
 
-DEFAULT_ADAPTER_A = Path("results/adapter_v1/metrics.json")
-DEFAULT_ADAPTER_B = Path("results/adapter_v2/metrics.json")
-DEFAULT_OUTPUT_JSON = Path("results/adapter_comparison.json")
-DEFAULT_OUTPUT_MD = Path("results/adapter_comparison.md")
+DEFAULT_ADAPTER_A = Path("artifacts/results/adapter_v1/metrics.json")
+DEFAULT_ADAPTER_B = Path("artifacts/results/adapter_v2/metrics.json")
+DEFAULT_OUTPUT_JSON = Path("artifacts/results/adapter_comparison.json")
+DEFAULT_OUTPUT_MD = Path("artifacts/results/adapter_comparison.md")
 
 PRIMARY_KEYS = [
     "json_valid_pct",

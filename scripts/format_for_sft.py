@@ -207,7 +207,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Format MCQs for supervised fine-tuning")
     parser.add_argument("--inputs", nargs="+", type=Path, required=True, help="Input JSONL files (filtered MCQs)")
     parser.add_argument("--output-dir", type=Path, default=Path("data/formatted"), help="Directory for formatted splits")
-    parser.add_argument("--stats-path", type=Path, default=Path("results/dataset_stats.json"), help="Path to write dataset stats JSON")
+    parser.add_argument("--stats-path", type=Path, default=Path("artifacts/results/dataset_stats.json"), help="Path to write dataset stats JSON")
     parser.add_argument("--manifest", type=Path, default=Path("data/formatted/manifest.json"), help="Write split hashes and counts here")
     parser.add_argument("--train-ratio", type=float, default=0.8, help="Train split ratio (default 0.8)")
     parser.add_argument("--val-ratio", type=float, default=0.1, help="Validation split ratio (default 0.1)")

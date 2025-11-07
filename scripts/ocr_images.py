@@ -3,7 +3,7 @@
 This script walks `data/images/` (or a supplied directory), runs OCR on each
 image, extracts lightweight metadata (figure references, axis labels, units,
 numeric tokens), and writes a JSON caption alongside the image under
-`data/captions/`. It also records a run log in `logs/cleanup/` for auditing.
+`data/captions/`. It also records a run log in `artifacts/logs/cleanup/` for auditing.
 
 Example:
 
@@ -44,7 +44,7 @@ except ImportError as exc:  # pragma: no cover
 
 DEFAULT_IMAGE_ROOT = Path("data/images")
 DEFAULT_CAPTION_ROOT = Path("data/captions")
-DEFAULT_LOG_DIR = Path("logs/cleanup")
+DEFAULT_LOG_DIR = Path("artifacts/logs/cleanup")
 IMAGE_PATTERN = re.compile(r"\.(png|jpg|jpeg|bmp|tif|tiff)$", re.IGNORECASE)
 EMBEDDED_PATTERN = re.compile(r"page_(\d{3})_img_(\d{2})", re.IGNORECASE)
 VECTOR_PATTERN = re.compile(r"page_(\d{3})_vector_(\d{2})", re.IGNORECASE)

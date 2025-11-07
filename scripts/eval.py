@@ -12,8 +12,8 @@ Day 9 validator, and computes a collection of heuristics:
 * AO distribution alignment versus the reference set
 * Hint/explanation length heuristics
 
-Results are written to ``results/<adapter_name>/metrics.json`` with a line-per-sample
-dump stored in ``results/<adapter_name>/samples.jsonl``.
+Results are written to ``artifacts/results/<adapter_name>/metrics.json`` with a line-per-sample
+dump stored in ``artifacts/results/<adapter_name>/samples.jsonl``.
 """
 
 from __future__ import annotations
@@ -95,14 +95,14 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("results/adapter_v1"),
+        default=Path("artifacts/results/adapter_v1"),
         help="Directory to store evaluation artefacts",
     )
     parser.add_argument(
         "--device",
         type=str,
-        default="cpu",
-        help="Device for model inference (e.g. 'cpu', 'cuda', 'cuda:0')",
+        default="auto",
+        help="Device for model inference (e.g. 'auto', 'cpu', 'cuda', 'cuda:0')",
     )
     parser.add_argument(
         "--max-new-tokens",
@@ -134,6 +134,24 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="Optional limit on number of samples to evaluate",
     )
     return parser.parse_args(argv)
+
+
+def resolve_device(device: str) -> str:
+    requested = (device or "cpu").strip()
+    lowered = requested.lower()
+    if lowered == "auto":
+        if torch.cuda.is_available():
+            return "cuda"
+        print("CUDA not available; evaluation will run on CPU.")
+        return "cpu"
+    if lowered.startswith("cuda"):
+        if not torch.cuda.is_available():
+            print("CUDA requested but not available; falling back to CPU.")
+            return "cpu"
+        return lowered
+    if lowered.startswith("cpu"):
+        return "cpu"
+    return requested
 
 
 def load_dataset(path: Path) -> List[Dict[str, Any]]:
@@ -399,7 +417,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     if args.limit and args.limit > 0:
         records = records[: args.limit]
 
-    device = args.device
+    device = resolve_device(args.device)
     tokenizer = prepare_tokenizer(args.base_model, args.trust_remote_code)
     model = prepare_model(args.base_model, args.adapter_path, device, args.trust_remote_code)
 

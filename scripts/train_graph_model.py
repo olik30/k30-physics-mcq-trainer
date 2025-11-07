@@ -10,7 +10,7 @@ Workflow (default settings):
 3. Optimise LoRA adapters over the human descriptions while keeping the base
    weights frozen.
 4. Save the adapter weights to ``models/adapters/graph_reader_v1/`` and emit a
-   structured training log under ``logs/train/graph_reader_v1/``.
+   structured training log under ``artifacts/logs/train/graph_reader_v1/``.
 
 All paths, hyperparameters, and split behaviour are configurable via CLI flags.
 
@@ -19,7 +19,7 @@ Example usage (PowerShell):
     & .\.venv312\Scripts\python.exe scripts\train_graph_model.py ^
         --graph-dir data/graph_human_descriptions/AQA ^
         --output-dir models/adapters/graph_reader_v1 ^
-        --log-dir logs/train/graph_reader_v1 ^
+        --log-dir artifacts/logs/train/graph_reader_v1 ^
         --epochs 3 --learning-rate 2e-4
 
 The script never copies the PNG assets; it streams them from disk to minimise
@@ -509,7 +509,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Fine-tune Qwen2.5-VL on graph summaries")
     parser.add_argument("--graph-dir", type=Path, default=Path("data/graph_human_descriptions/AQA"))
     parser.add_argument("--output-dir", type=Path, default=Path("models/adapters/graph_reader_v1"))
-    parser.add_argument("--log-dir", type=Path, default=Path("logs/train/graph_reader_v1"))
+    parser.add_argument("--log-dir", type=Path, default=Path("artifacts/logs/train/graph_reader_v1"))
     parser.add_argument("--model-name", default="Qwen/Qwen2.5-VL-7B-Instruct")
     parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--learning-rate", type=float, default=2e-4)

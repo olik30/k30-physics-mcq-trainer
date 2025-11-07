@@ -131,7 +131,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--adapter-name", type=str, default="adapter_v1")
     parser.add_argument("--run-name", type=str, default="adapter_v1")
     parser.add_argument("--manifest", type=Path, default=Path("data/formatted/manifest.json"))
-    parser.add_argument("--log-path", type=Path, default=Path("logs/train/adapter_v1.jsonl"))
+    parser.add_argument("--log-path", type=Path, default=Path("artifacts/logs/train/adapter_v1.jsonl"))
 
     parser.add_argument("--max-seq-length", type=int, default=2048)
     parser.add_argument("--per-device-train-batch-size", type=int, default=1)
@@ -307,7 +307,7 @@ def build_trainer(
 
     max_steps = args.max_steps if args.max_steps > 0 else -1
 
-    use_cpu = args.device_map == "cpu"
+    use_cpu = str(args.device_map).lower().startswith("cpu")
 
     training_args = TrainingArguments(
         output_dir=str(args.output_dir),
@@ -443,6 +443,16 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         level=logging.INFO,
         format="[%(asctime)s] %(levelname)s %(name)s: %(message)s",
     )
+
+    if args.device_map == "auto":
+        if torch.cuda.is_available():
+            args.device_map = "cuda"
+        else:
+            LOGGER.warning("CUDA not available; training will run on CPU.")
+            args.device_map = "cpu"
+    elif str(args.device_map).lower().startswith("cuda") and not torch.cuda.is_available():
+        LOGGER.warning("CUDA requested but not available; falling back to CPU.")
+        args.device_map = "cpu"
 
     validate_paths(args)
 

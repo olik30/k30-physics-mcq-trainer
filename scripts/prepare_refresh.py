@@ -1,25 +1,25 @@
 """Select evaluation failures and build a targeted generation source file.
 
 Day 13 requires us to:
-* Parse the structured evaluation log (`results/adapter_v1/samples.jsonl`)
+* Parse the structured evaluation log (`artifacts/results/adapter_v1/samples.jsonl`)
 * Tag problematic items (JSON parse errors, schema failures, duplicate distractors, etc.)
 * Produce a small JSONL containing just those question parts so `scripts/auto_generate.py`
   can regenerate them without crawling the full source dataset.
 
 The script emits three artefacts:
-1. `results/<adapter>/refresh_summary.json` – overall counts + reasons
-2. `results/<adapter>/refresh_summary.md` – human-readable checklist
+1. `artifacts/results/<adapter>/refresh_summary.json` – overall counts + reasons
+2. `artifacts/results/<adapter>/refresh_summary.md` – human-readable checklist
 3. `data/parsed/refresh_sources.jsonl` – the trimmed question-part records
 
 Example usage:
 
     python scripts/prepare_refresh.py \
-        --evaluation results/adapter_v1/samples.jsonl \
+        --evaluation artifacts/results/adapter_v1/samples.jsonl \
         --formatted data/formatted/test.jsonl \
         --parsed data/parsed/questions.jsonl \
         --output-sources data/parsed/refresh_sources.jsonl \
-        --summary-json results/adapter_v1/refresh_summary.json \
-        --summary-md results/adapter_v1/refresh_summary.md \
+        --summary-json artifacts/results/adapter_v1/refresh_summary.json \
+        --summary-md artifacts/results/adapter_v1/refresh_summary.md \
         --unique-threshold 0.75
 """
 
@@ -33,12 +33,12 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 
-DEFAULT_EVALUATION = Path("results/adapter_v1/samples.jsonl")
+DEFAULT_EVALUATION = Path("artifacts/results/adapter_v1/samples.jsonl")
 DEFAULT_FORMATTED = Path("data/formatted/test.jsonl")
 DEFAULT_PARSED = Path("data/parsed/questions.jsonl")
 DEFAULT_OUTPUT_SOURCES = Path("data/parsed/refresh_sources.jsonl")
-DEFAULT_SUMMARY_JSON = Path("results/adapter_v1/refresh_summary.json")
-DEFAULT_SUMMARY_MD = Path("results/adapter_v1/refresh_summary.md")
+DEFAULT_SUMMARY_JSON = Path("artifacts/results/adapter_v1/refresh_summary.json")
+DEFAULT_SUMMARY_MD = Path("artifacts/results/adapter_v1/refresh_summary.md")
 
 
 STRUCTURAL_ERROR_KEYS = {

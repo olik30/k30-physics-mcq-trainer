@@ -6,8 +6,11 @@ import argparse
 import json
 import random
 import sys
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
+
+os.environ.setdefault("KMP_AFFINITY", "disabled")
 
 try:  # pragma: no cover
     from . import (
@@ -42,6 +45,7 @@ DEFAULT_VARIANT_LOG = Path("data/review/variant_choices.jsonl")
 DEFAULT_FEEDBACK_LOG = Path("data/review/day13_feedback_log.jsonl")
 DEFAULT_SEED_DATA = Path("data/filtered/seed_train.filtered.jsonl")
 DEFAULT_SOURCE_DATASET = Path("data/parsed/questions.jsonl")
+DEFAULT_EVAL_DATASET = Path("data/eval/eval_core.jsonl")
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -131,8 +135,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--device-map",
-        default="cpu",
-        help="Device map for training/evaluation (default: cpu)",
+        default="auto",
+        help="Device map for training/evaluation (default: auto)",
     )
     parser.add_argument(
         "--max-steps",
@@ -179,6 +183,12 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         type=int,
         default=1,
         help="Number of MCQ variants to generate per question part",
+    )
+    parser.add_argument(
+        "--evaluation-dataset",
+        type=Path,
+        default=DEFAULT_EVAL_DATASET,
+        help="Chat-formatted dataset to use for evaluation (falls back to formatted test split if missing)",
     )
     return parser.parse_args(argv)
 
@@ -512,7 +522,7 @@ def apply_variant_choices(
 
 def run_refresh_cycle(args: argparse.Namespace) -> None:
     print("Step 1/8: sample question parts")
-    summary_json = Path("results") / f"{args.adapter_name}_random_summary.json"
+    summary_json = Path("artifacts/results") / f"{args.adapter_name}_random_summary.json"
     sampled = sample_question_parts(
         args.source_dataset,
         args.question_count,
@@ -548,9 +558,9 @@ def run_refresh_cycle(args: argparse.Namespace) -> None:
         "--output",
         str(args.refresh_candidates),
         "--report",
-        f"reports/{reports_tag}_refresh.json",
+        f"artifacts/reports/{reports_tag}_refresh.json",
         "--coverage-report",
-        f"reports/{reports_tag}_refresh.md",
+        f"artifacts/reports/{reports_tag}_refresh.md",
         "--emit-flagged",
         f"data/review/{reports_tag}_refresh_flagged.jsonl",
     ]
@@ -603,7 +613,7 @@ def run_refresh_cycle(args: argparse.Namespace) -> None:
         format_args.extend(
             [
                 "--stats-path",
-                "results/dataset_stats.json",
+                "artifacts/results/dataset_stats.json",
                 "--output-dir",
                 "data/formatted",
             ]
@@ -614,7 +624,7 @@ def run_refresh_cycle(args: argparse.Namespace) -> None:
 
     print("Step 6/8: train_lora.py")
     adapter_dir = Path("models/adapters") / args.adapter_name
-    log_path = Path("logs/train") / f"{args.adapter_name}.jsonl"
+    log_path = Path("artifacts/logs/train") / f"{args.adapter_name}.jsonl"
     train_args = [
         "--base-model",
         "Qwen/Qwen2.5-0.5B-Instruct",
@@ -658,15 +668,28 @@ def run_refresh_cycle(args: argparse.Namespace) -> None:
     train_lora.main(train_args)
 
     print("Step 7/8: eval.py")
-    eval_output = Path("results") / args.adapter_name
+    eval_output = Path("artifacts/results") / args.adapter_name
+    eval_dataset = args.evaluation_dataset
+    if not eval_dataset.exists():
+        fallback_dataset = Path("data/formatted/test.jsonl")
+        print(
+            f"Evaluation dataset {eval_dataset} not found; falling back to {fallback_dataset}",
+        )
+        eval_dataset = fallback_dataset
     eval_args = [
         "--trust-remote-code",
+        "--dataset",
+        str(eval_dataset),
         "--device",
         args.device_map,
         "--adapter-path",
         str(adapter_dir),
         "--output-dir",
         str(eval_output),
+        "--max-new-tokens",
+        "256",
+        "--temperature",
+        "0",
     ]
     eval.main(eval_args)
 
@@ -681,6 +704,10 @@ def run_refresh_cycle(args: argparse.Namespace) -> None:
             str(eval_output / "metrics.json"),
             "--label-b",
             args.adapter_name,
+            "--output-json",
+            "artifacts/results/adapter_comparison.json",
+            "--output-md",
+            "artifacts/results/adapter_comparison.md",
         ]
         compare_adapters.main(comparison_args)
     else:
@@ -695,8 +722,8 @@ def run_refresh_cycle(args: argparse.Namespace) -> None:
             str(args.variant_log if use_variant_flow else args.feedback_log),
             str(eval_output / "metrics.json"),
             str(eval_output / "samples.jsonl"),
-            "results/adapter_comparison.json",
-            "results/adapter_comparison.md",
+            "artifacts/results/adapter_comparison.json",
+            "artifacts/results/adapter_comparison.md",
             "docs/feedback-playbook.md",
             "scripts/feedback_queue.py",
             "config/adapters.yaml",

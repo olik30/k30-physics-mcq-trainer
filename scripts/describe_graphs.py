@@ -37,7 +37,7 @@ DEFAULT_GRAPH_JSON_DIR = Path("data/graph_analysis")
 DEFAULT_OUTPUT_ROOT = Path("data/graph_descriptions")
 DEFAULT_CAPTION_DIR = Path("data/captions")
 DEFAULT_IMAGE_ROOT = Path("data/images")
-DEFAULT_LOG_DIR = Path("logs/graph_descriptions")
+DEFAULT_LOG_DIR = Path("artifacts/logs/graph_descriptions")
 
 
 def parse_args() -> argparse.Namespace:

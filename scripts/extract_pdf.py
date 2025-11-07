@@ -2,7 +2,7 @@
 
 This utility walks the `data/pdfs/` directory (or a supplied root), writes
 per-page text files under `data/raw/`, exports embedded images to
-`data/images/`, and records a JSONL log in `logs/extract/` summarising each
+`data/images/`, and records a JSONL log in `artifacts/logs/extract/` summarising each
 processed file.
 
 Example:
@@ -41,7 +41,7 @@ import cv2  # type: ignore
 DEFAULT_PDF_ROOT = Path("data/pdfs")
 DEFAULT_RAW_ROOT = Path("data/raw")
 DEFAULT_IMAGE_ROOT = Path("data/images")
-DEFAULT_LOG_DIR = Path("logs/extract")
+DEFAULT_LOG_DIR = Path("artifacts/logs/extract")
 
 DEFAULT_RENDER_DPI = 600
 DEFAULT_MIN_RASTER_AREA = 2048

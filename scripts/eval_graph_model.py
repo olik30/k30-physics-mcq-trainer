@@ -6,15 +6,15 @@ generation over the held-out evaluation split, and computes lightweight
 textual metrics (Rouge-L, unigram BLEU, cosine similarity).
 
 Outputs:
-    • ``results/graph_reader_v1/metrics.json`` – aggregate metrics
-    • ``results/graph_reader_v1/samples.jsonl`` – per-sample metadata and scores
+    • ``artifacts/results/graph_reader_v1/metrics.json`` – aggregate metrics
+    • ``artifacts/results/graph_reader_v1/samples.jsonl`` – per-sample metadata and scores
 
 Example (PowerShell):
 
     & .\.venv312\Scripts\python.exe scripts\eval_graph_model.py \
         --graph-dir data/graph_human_descriptions/AQA \
         --adapter-dir models/adapters/graph_reader_v1 \
-        --results-dir results/graph_reader_v1
+        --results-dir artifacts/results/graph_reader_v1
 
 """
 
@@ -316,8 +316,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate the graph LoRA adapter")
     parser.add_argument("--graph-dir", type=Path, default=Path("data/graph_human_descriptions/AQA"))
     parser.add_argument("--adapter-dir", type=Path, default=Path("models/adapters/graph_reader_v1"))
-    parser.add_argument("--results-dir", type=Path, default=Path("results/graph_reader_v1"))
-    parser.add_argument("--log-dir", type=Path, default=Path("logs/eval/graph_reader_v1"))
+    parser.add_argument("--results-dir", type=Path, default=Path("artifacts/results/graph_reader_v1"))
+    parser.add_argument("--log-dir", type=Path, default=Path("artifacts/logs/eval/graph_reader_v1"))
     parser.add_argument("--model-name", default="Qwen/Qwen2.5-VL-7B-Instruct")
     parser.add_argument("--eval-count", type=int, default=8)
     parser.add_argument("--max-new-tokens", type=int, default=256)

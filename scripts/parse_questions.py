@@ -66,7 +66,7 @@ RAW_ROOT = Path("data/raw")
 CAPTION_ROOT = Path("data/captions")
 GRAPH_ROOT = Path("data/graph_analysis")
 OUTPUT_PATH = Path("data/parsed/questions.jsonl")
-RUN_LOG_DIR = Path("logs/parse")
+RUN_LOG_DIR = Path("artifacts/logs/parse")
 
 
 HEADER_EXACT = {
@@ -770,7 +770,7 @@ def parse_args() -> argparse.Namespace:
         "--log-dir",
         type=Path,
         default=RUN_LOG_DIR,
-        help="Directory for parser logs (default: logs/parse)",
+        help="Directory for parser logs (default: artifacts/logs/parse)",
     )
     return parser.parse_args()
 

@@ -497,13 +497,15 @@ def apply_variant_choices(
 
     if accepted:
         write_jsonl(accept_output, accepted)
-    elif accept_output.exists():
-        accept_output.unlink()
+    else:
+        accept_output.parent.mkdir(parents=True, exist_ok=True)
+        accept_output.write_text("", encoding="utf-8")
 
     if rejected:
         write_jsonl(reject_output, rejected)
-    elif reject_output.exists():
-        reject_output.unlink()
+    else:
+        reject_output.parent.mkdir(parents=True, exist_ok=True)
+        reject_output.write_text("", encoding="utf-8")
 
     return stats
 

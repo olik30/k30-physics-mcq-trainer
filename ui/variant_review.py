@@ -188,7 +188,7 @@ def main() -> None:
         )
         if success:
             st.session_state.group_index = 0
-            st.experimental_rerun()
+            st.rerun()
 
     records = load_jsonl(dataset_path)
     groups = group_variants(records)
@@ -288,21 +288,21 @@ def main() -> None:
         append_log_entry(log_path, entry)
         st.success("Decisions saved.")
         st.session_state.group_index += 1
-        st.experimental_rerun()
+        st.rerun()
 
     col_prev, col_skip, col_next = st.columns([1, 1, 1])
     with col_prev:
         if st.button("Previous"):
             st.session_state.group_index = (st.session_state.group_index - 1) % len(pending_groups)
-            st.experimental_rerun()
+            st.rerun()
     with col_skip:
         if st.button("Skip group"):
             st.session_state.group_index += 1
-            st.experimental_rerun()
+            st.rerun()
     with col_next:
-        if st.button("Next (no save)"):
+        if st.button("Next"):
             st.session_state.group_index += 1
-            st.experimental_rerun()
+            st.rerun()
 
 
 if __name__ == "__main__":

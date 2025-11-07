@@ -19,6 +19,8 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 
 ## 2. Generate Fresh Drafts (5 variants per question)
 
+Click **“Generate new variants & retrain”** in the Streamlit sidebar, or run the command below if you prefer the terminal:
+
 ```powershell
 python scripts/run_refresh_cycle.py --adapter-name adapter_v3 --compare-with results/adapter_v2/metrics.json --variants-per-source 5 --bundle
 ```

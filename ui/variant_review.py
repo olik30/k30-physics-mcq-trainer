@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
@@ -12,6 +13,8 @@ import streamlit as st
 
 DEFAULT_DATASET = Path("data/filtered/refresh_candidates.jsonl")
 DEFAULT_LOG = Path("data/review/variant_choices.jsonl")
+DEFAULT_ADAPTER = "adapter_v3"
+DEFAULT_COMPARE = "results/adapter_v2/metrics.json"
 
 
 def load_jsonl(path: Path) -> List[Dict[str, Any]]:
@@ -103,6 +106,56 @@ def append_log_entry(log_path: Path, entry: Dict[str, Any]) -> None:
         stream.write("\n")
 
 
+def run_refresh_cycle(
+    adapter_name: str,
+    compare_with: str,
+    variants_per_source: int,
+    bundle: bool,
+    extra_args: Optional[str] = None,
+) -> bool:
+    command = [
+        "python",
+        "scripts/run_refresh_cycle.py",
+        "--adapter-name",
+        adapter_name,
+        "--compare-with",
+        compare_with,
+        "--variants-per-source",
+        str(max(int(variants_per_source), 1)),
+    ]
+    if bundle:
+        command.append("--bundle")
+    if extra_args:
+        command.extend(extra_args.split())
+
+    placeholder = st.empty()
+    log_lines: List[str] = []
+    try:
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+    except FileNotFoundError as exc:
+        placeholder.error(f"Failed to launch process: {exc}")
+        return False
+
+    with placeholder.container():
+        st.markdown("**Running refresh cycle…**")
+        output_area = st.empty()
+        for line in process.stdout or []:
+            log_lines.append(line.rstrip())
+            output_area.text("\n".join(log_lines[-20:]))
+        process.wait()
+
+    if process.returncode == 0:
+        placeholder.success("Refresh cycle completed successfully.")
+        return True
+    placeholder.error("Refresh cycle failed. Check the output above for details.")
+    return False
+
+
 def main() -> None:
     st.set_page_config(page_title="MCQ Variant Reviewer", layout="wide")
     st.title("MCQ Variant Reviewer")
@@ -113,6 +166,24 @@ def main() -> None:
     dataset_path = Path(st.sidebar.text_input("Dataset path", default_dataset))
     log_path = Path(st.sidebar.text_input("Log path", default_log))
     show_reviewed = st.sidebar.checkbox("Show already reviewed groups", value=False)
+
+    adapter_name = st.sidebar.text_input("Adapter name", DEFAULT_ADAPTER)
+    compare_with = st.sidebar.text_input("Compare-with metrics", DEFAULT_COMPARE)
+    variants_per_source = st.sidebar.number_input("Variants per question", min_value=1, value=5)
+    bundle = st.sidebar.checkbox("Bundle artefacts", value=True)
+    extra_args = st.sidebar.text_input("Extra args (optional)", "")
+
+    if st.sidebar.button("Generate new variants & retrain", use_container_width=True):
+        success = run_refresh_cycle(
+            adapter_name=adapter_name,
+            compare_with=compare_with,
+            variants_per_source=variants_per_source,
+            bundle=bundle,
+            extra_args=extra_args,
+        )
+        if success:
+            st.session_state.group_index = 0
+            st.experimental_rerun()
 
     records = load_jsonl(dataset_path)
     groups = group_variants(records)

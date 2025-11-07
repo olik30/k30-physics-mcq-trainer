@@ -9,7 +9,7 @@ This page explains, in plain language, how to review MCQ drafts, pick the best o
 Install the tools we use:
 
 ```powershell
-pip install streamlit transformers datasets accelerate
+pip install streamlit transformers datasets accelerate peft
 pip install torch --index-url https://download.pytorch.org/whl/cpu
 ```
 
@@ -31,7 +31,7 @@ This creates:
 - `data/parsed/refresh_sources.jsonl` – the source question parts that were regenerated.
 - `reports/adapter_v3_refresh.*` – quick quality summaries.
 
-Run this command whenever you want a new batch to review. (It also performs a short training pass; increase `--max-steps` later for longer runs.)
+Run this command whenever you want a new batch to review. Each pass regenerates five variants for every flagged question part (often ~40 parts → ~200 variants). To work on fewer questions, adjust the “Variants per question” box in the UI or add `--auto-generate-limit <count>` in the terminal. The script also performs a short training pass; increase `--max-steps` later for longer runs once you’re happy with the variants.
 
 ---
 
@@ -60,10 +60,10 @@ This opens a simple browser page with buttons instead of typing. The app writes 
 
 Your notes should call out what works (or doesn’t): e.g. “Accept – clear hint, numerical check matches mark scheme” or “Reject – explanation repeats question.”
 
-The log file records:
+The next training run automatically splits your decisions into:
 
-- `refresh_accept.jsonl` – all variants marked “accept” (preferred ones are flagged).
-- `refresh_reject.jsonl` – variants marked “reject” or left undecided.
+- `refresh_accept.jsonl` – all variants marked “accept” (preferred ones are flagged and weighted higher).
+- `refresh_reject.jsonl` – variants marked “reject” or left undecided, ready for regeneration.
 
 ---
 

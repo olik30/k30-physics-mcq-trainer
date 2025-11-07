@@ -141,7 +141,7 @@ NOTE: MARKDOWN PROGRESS + WHAT'S IMPLEMENENTED + DELIVERABLES WHEN YOU FINISH A 
 - Assembled `handoff/day14_artifacts/` via `scripts/create_handoff_bundle.py`, bundling adapters, metrics, refresh candidates, feedback log, and the reviewer playbook with a manifest/README for the QA team.
 
 **Post-Day 14 — Human QA & iterative improvement (starts after automation ends)**
-- Use the new variant reviewer to compare five drafts per question, pick a favourite, and mark each variant `accept`/`reject`; decisions land in `data/review/variant_choices.jsonl`.
+- Use the new variant reviewer (CLI or `streamlit run ui/variant_review.py`) to compare five drafts per question, pick a favourite, and mark each variant `accept`/`reject`; decisions land in `data/review/variant_choices.jsonl`.
 - `run_refresh_cycle.py` ingests that log, writes accepted variants to `data/filtered/refresh_accept.jsonl` (preferred ones receive extra weight), and places rejected/pending variants into `data/filtered/refresh_reject.jsonl` for regeneration.
 - Once wording quality is reliable, switch to the answer-focused reviewer (`feedback_queue.py review …`) to correct answer indices and rationale logs (`data/review/day13_feedback_log.jsonl`).
 - Inspect evaluation dashboards, choose the preferred adapter checkpoint, and note follow-up training requests; no deployment or rollout tasks are required at this stage.

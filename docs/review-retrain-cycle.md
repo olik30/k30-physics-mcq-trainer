@@ -13,6 +13,11 @@
      --input data/filtered/refresh_candidates.jsonl \
      --log data/review/variant_choices.jsonl
    ```
+   _Prefer a GUI?_ Launch the Streamlit app:
+   ```powershell
+   streamlit run ui/variant_review.py
+   ```
+   (Install once with `pip install streamlit`.)
    - First choose the preferred variant (`1-5`, or `n` if none stand out).
    - For every variant, answer `a` (accept) or `r` (reject) and leave a short note:
      - Accepted-but-not-preferred notes should mention why it’s still good and why another variant wins.

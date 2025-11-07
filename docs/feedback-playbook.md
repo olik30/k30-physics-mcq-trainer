@@ -21,6 +21,10 @@ python scripts/feedback_queue.py variants \
   --input data/filtered/refresh_candidates.jsonl \
   --log data/review/variant_choices.jsonl
 ```
+or launch the Streamlit UI (after `pip install streamlit`):
+```bash
+streamlit run ui/variant_review.py
+```
 
 - Each screen shows five variants for the same question part.
 - First pick the preferred variant (`1-5`, or `n` if none are standout).

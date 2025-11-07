@@ -1,106 +1,59 @@
-# Review → Retrain Cycle (Quick Guide)
+# Review → Retrain Cycle (UI version)
 
-This page explains, in plain language, how to review MCQ drafts, pick the best ones, and retrain the model. Follow the steps in order.
-
----
-
-## 1. One-Time Setup
-
-Install the tools we use:
-
-```powershell
-pip install streamlit transformers datasets accelerate peft
-pip install torch --index-url https://download.pytorch.org/whl/cpu
-```
-
-(The second command installs the CPU build of PyTorch so the training script can run anywhere.)
+Everything here can be done inside the **MCQ Variant Reviewer** Streamlit page—no terminals or commands required.
 
 ---
 
-## 2. Generate Fresh Drafts (5 variants per question)
-
-Click **“Generate new variants & retrain”** in the Streamlit sidebar, or run the command below if you prefer the terminal:
-
-```powershell
-python scripts/run_refresh_cycle.py --adapter-name adapter_v3 --compare-with results/adapter_v2/metrics.json --variants-per-source 5 --bundle
-```
-
-This creates:
-
-- `data/filtered/refresh_candidates.jsonl` – the 5 variants for each question.
-- `data/parsed/refresh_sources.jsonl` – the source question parts that were regenerated.
-- `reports/adapter_v3_refresh.*` – quick quality summaries.
-
-Run this command whenever you want a new batch to review. Each pass regenerates five variants for every flagged question part (often ~40 parts → ~200 variants). To work on fewer questions, adjust the “Variants per question” box in the UI or add `--auto-generate-limit <count>` in the terminal. The script also performs a short training pass; increase `--max-steps` later for longer runs once you’re happy with the variants.
+## Step 0 — Open the reviewer
+- Launch the MCQ Variant Reviewer page (your team already has a desktop shortcut or browser bookmark).
+- If the page says “No variant groups left”, click the sidebar button **Generate new variants & retrain** once to create a fresh batch.
 
 ---
 
-## 3. Review the Variants
+## Step 1 — Review the five variants
+For each question row you see:
+1. Read the five variants shown side-by-side.
+2. Choose a **Preferred variant** (`1–5`) or leave “None” if nothing stands out yet.
+3. For every variant, pick **Accept** or **Reject** and leave a short note (e.g. “Accept – hint mentions g correctly”, “Reject – explanation copies the question”).
+4. Click **Save decisions**.
+5. Move between questions with **Previous**, **Skip group**, or **Next (no save)**.
 
-### Option A – Command line
-
-```powershell
-python scripts/feedback_queue.py variants \
-  --input data/filtered/refresh_candidates.jsonl \
-  --log data/review/variant_choices.jsonl
-```
-
-You’ll see each question with five columns. For every group:
-
-1. Pick the **preferred** variant (`1-5`, or `n` if none stand out).
-2. For each variant, type `a` (accept) or `r` (reject) and add a short note.
-
-### Option B – Streamlit web app
-
-```powershell
-streamlit run ui/variant_review.py
-```
-
-This opens a simple browser page with buttons instead of typing. The app writes the same log file (`data/review/variant_choices.jsonl`).
-
-Your notes should call out what works (or doesn’t): e.g. “Accept – clear hint, numerical check matches mark scheme” or “Reject – explanation repeats question.”
-
-The next training run automatically splits your decisions into:
-
-- `refresh_accept.jsonl` – all variants marked “accept” (preferred ones are flagged and weighted higher).
-- `refresh_reject.jsonl` – variants marked “reject” or left undecided, ready for regeneration.
+Your notes are saved automatically to the project log so the training script knows which variants to keep.
 
 ---
 
-## 4. Retrain With Your Choices
+## Step 2 — Retrain from the sidebar
+Once you have a batch of decisions:
+1. Open the sidebar (tap the “>” chevron if it’s hidden).
+2. Check the settings:
+   - **Adapter name** — pick the label for the new training run (e.g. `adapter_v3`).
+   - **Compare-with metrics** — usually the previous adapter’s metrics file.
+   - **Variants per question** — default is 5; lower it if you want fewer drafts.
+   - **Bundle artefacts** — keep on if you want the hand-off bundle refreshed.
+3. Press **Generate new variants & retrain**.
+4. The centre panel streams live progress; when it finishes successfully the page refreshes with the newly generated variants ready for another pass.
 
-After you’ve reviewed enough questions, rerun the cycle (same command as step 2). The script will:
-
-1. Pull in your decisions from `data/review/variant_choices.jsonl`.
-2. Rebuild the training set using the accepted variants.
-3. Fine-tune the adapter and produce new evaluation metrics in `results/<adapter_name>/`.
-
-Repeat steps 2–4 as many times as needed until all five variants for each question are acceptable.
-
----
-
-## 5. (Optional) Answer-Only Review Stage
-
-Once the wording/hints look good, switch to the original answer checker to fix incorrect answers:
-
-```powershell
-python scripts/feedback_queue.py review \
-  --input data/filtered/refresh_candidates.jsonl \
-  --log data/review/day13_feedback_log.jsonl
-```
-
-This prompt lets you mark each MCQ `approve` / `needs-work` / `reject`, confirm the correct option letter, and leave a short rationale.
+Each retrain reuses your accepted variants and regenerates new drafts for anything you rejected or skipped.
 
 ---
 
-### Where Files Live
+## Step 3 — Repeat until happy
+Keep looping on the same page:
+**Review → Save decisions → Generate new variants & retrain**
+until every question has at least one acceptable variant (and ideally several good ones for variety).
 
-- `data/filtered/refresh_candidates.jsonl` – drafts waiting for review.
-- `data/review/variant_choices.jsonl` – your variant decisions.
-- `data/filtered/refresh_accept.jsonl` – variants that will train the next adapter.
-- `data/filtered/refresh_reject.jsonl` – variants to regenerate later.
-- `models/adapters/<adapter_name>/` – saved LoRA adapters.
-- `results/<adapter_name>/` – evaluation reports (metrics + sample outputs).
+---
 
-Keep this cheat sheet handy and repeat the loop: **Generate → Review variants → Retrain → (Optional) Answer review**.
+### Optional: answer-only check
+When the wording and hints look right, switch to the “Answer Review” tab inside the app to double-check final answers and log a quick rationale for each.
+
+---
+
+### Behind the scenes (for reference only)
+- `data/review/variant_choices.jsonl` stores every decision you make.
+- `data/filtered/refresh_accept.jsonl` keeps the variants you approved (preferred ones are weighted more).
+- `data/filtered/refresh_reject.jsonl` holds the variants you rejected or skipped so they can be regenerated next round.
+- `models/adapters/<name>/` and `results/<name>/` contain the newly trained adapter and its evaluation reports.
+
+That’s all—work entirely inside the reviewer: review the variants, press the sidebar button, and the system takes care of the rest.
 

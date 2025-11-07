@@ -212,7 +212,7 @@ def validate_record(data: Dict[str, object]) -> List[str]:
     return errors
 
 
-def main() -> None:
+def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate MCQ drafts via local model")
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
@@ -234,7 +234,11 @@ def main() -> None:
         action="store_true",
         help="Generate even if question part already exists in seed/train datasets",
     )
-    args = parser.parse_args()
+    return parser.parse_args(argv)
+
+
+def main(argv: Optional[Sequence[str]] = None) -> None:
+    args = parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
 

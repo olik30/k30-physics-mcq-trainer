@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
@@ -16,7 +17,6 @@ try:  # pragma: no cover
         eval,
         filter_balance,
         format_for_sft,
-        prepare_refresh,
         train_lora,
     )
 except ImportError:  # pragma: no cover
@@ -26,12 +26,10 @@ except ImportError:  # pragma: no cover
     import eval  # type: ignore
     import filter_balance  # type: ignore
     import format_for_sft  # type: ignore
-    import prepare_refresh  # type: ignore
     import train_lora  # type: ignore
 
 LETTER_LABELS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
-DEFAULT_EVALUATION = Path("results/adapter_v2/samples.jsonl")
 DEFAULT_FORMATTED_MANIFEST = Path("data/formatted/manifest.json")
 DEFAULT_REFRESH_SOURCES = Path("data/parsed/refresh_sources.jsonl")
 DEFAULT_REFRESH_DRAFTS = Path("data/parsed/refresh_drafts.jsonl")
@@ -43,16 +41,11 @@ DEFAULT_VARIANT_REJECT = Path("data/filtered/refresh_reject.jsonl")
 DEFAULT_VARIANT_LOG = Path("data/review/variant_choices.jsonl")
 DEFAULT_FEEDBACK_LOG = Path("data/review/day13_feedback_log.jsonl")
 DEFAULT_SEED_DATA = Path("data/filtered/seed_train.filtered.jsonl")
+DEFAULT_SOURCE_DATASET = Path("data/parsed/questions.jsonl")
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Automate the feedback -> refresh -> train loop")
-    parser.add_argument(
-        "--evaluation",
-        type=Path,
-        default=DEFAULT_EVALUATION,
-        help="Evaluation samples JSONL to analyse (defaults to latest adapter)",
-    )
     parser.add_argument(
         "--formatted-manifest",
         type=Path,
@@ -118,6 +111,18 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         type=Path,
         default=DEFAULT_SEED_DATA,
         help="Seed dataset to merge when formatting for SFT",
+    )
+    parser.add_argument(
+        "--source-dataset",
+        type=Path,
+        default=DEFAULT_SOURCE_DATASET,
+        help="Full question dataset to sample from",
+    )
+    parser.add_argument(
+        "--question-count",
+        type=int,
+        default=5,
+        help="Number of question parts to sample per cycle",
     )
     parser.add_argument(
         "--adapter-name",
@@ -208,6 +213,47 @@ def load_jsonl(path: Path) -> List[Dict[str, object]]:
             except json.JSONDecodeError as exc:
                 raise ValueError(f"Invalid JSON (line {line_number}) in {path}: {exc}") from exc
     return records
+
+
+def sample_question_parts(
+    source_dataset: Path,
+    question_count: int,
+    output_path: Path,
+    summary_path: Path,
+) -> int:
+    records = load_jsonl(source_dataset)
+    pool: List[Dict[str, Any]] = []
+    for record in records:
+        stem = record.get("stem")
+        parts = record.get("parts") or []
+        for part in parts:
+            pool.append({
+                "question_id": record.get("question_id"),
+                "board": record.get("board"),
+                "paper": record.get("paper"),
+                "session": record.get("session"),
+                "stem": stem,
+                "assets": record.get("assets") or {},
+                "parts": [part],
+            })
+
+    if not pool:
+        raise ValueError(f"No question parts found in {source_dataset}")
+
+    rng = random.Random()
+    sample_size = min(max(question_count, 1), len(pool))
+    selected = rng.sample(pool, sample_size)
+
+    write_jsonl(output_path, selected)
+
+    summary = {
+        "source_dataset": str(source_dataset),
+        "question_count": sample_size,
+        "output": str(output_path),
+    }
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    return sample_size
 
 
 def write_jsonl(path: Path, records: Sequence[Dict[str, object]]) -> None:
@@ -463,29 +509,15 @@ def apply_variant_choices(
 
 
 def run_refresh_cycle(args: argparse.Namespace) -> None:
-    print("Step 1/8: prepare_refresh.py")
-    summary_json = Path("results") / f"{args.adapter_name}_refresh_summary.json"
-    summary_md = Path("results") / f"{args.adapter_name}_refresh_summary.md"
-    prepare_refresh_args = [
-        "--evaluation",
-        str(args.evaluation),
-        "--formatted",
-        str(args.formatted_manifest.parent / "test.jsonl"),
-        "--parsed",
-        "data/parsed/questions.jsonl",
-        "--output-sources",
-        str(args.refresh_sources),
-        "--summary-json",
-        str(summary_json),
-        "--summary-md",
-        str(summary_md),
-        "--include-answer-mismatch",
-    ]
-    prepare_refresh.main(prepare_refresh_args)
-
-    if not args.refresh_sources.exists():
-        print("No refresh_sources.jsonl created; aborting cycle.")
-        return
+    print("Step 1/8: sample question parts")
+    summary_json = Path("results") / f"{args.adapter_name}_random_summary.json"
+    sampled = sample_question_parts(
+        args.source_dataset,
+        args.question_count,
+        args.refresh_sources,
+        summary_json,
+    )
+    print(f"Selected {sampled} question parts for regeneration.")
 
     if args.refresh_drafts.exists():
         args.refresh_drafts.unlink()
@@ -525,7 +557,7 @@ def run_refresh_cycle(args: argparse.Namespace) -> None:
     print("Step 4/8: apply reviewer decisions")
     variant_choices = load_variant_choices(args.variant_log) if args.variant_log else {}
 
-    use_variant_flow = bool(variant_choices)
+    use_variant_flow = args.variant_log is not None
     if use_variant_flow:
         stats = apply_variant_choices(
             args.refresh_candidates,

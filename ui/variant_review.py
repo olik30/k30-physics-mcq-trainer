@@ -15,6 +15,7 @@ DEFAULT_DATASET = Path("data/filtered/refresh_candidates.jsonl")
 DEFAULT_LOG = Path("data/review/variant_choices.jsonl")
 DEFAULT_ADAPTER = "adapter_v3"
 DEFAULT_COMPARE = "results/adapter_v2/metrics.json"
+DEFAULT_QUESTION_COUNT = 5
 
 
 def load_jsonl(path: Path) -> List[Dict[str, Any]]:
@@ -109,6 +110,7 @@ def append_log_entry(log_path: Path, entry: Dict[str, Any]) -> None:
 def run_refresh_cycle(
     adapter_name: str,
     compare_with: str,
+    question_count: int,
     variants_per_source: int,
     bundle: bool,
     extra_args: Optional[str] = None,
@@ -123,6 +125,7 @@ def run_refresh_cycle(
         "--variants-per-source",
         str(max(int(variants_per_source), 1)),
     ]
+    command.extend(["--question-count", str(max(int(question_count), 1))])
     if bundle:
         command.append("--bundle")
     if extra_args:
@@ -169,6 +172,7 @@ def main() -> None:
 
     adapter_name = st.sidebar.text_input("Adapter name", DEFAULT_ADAPTER)
     compare_with = st.sidebar.text_input("Compare-with metrics", DEFAULT_COMPARE)
+    question_count = st.sidebar.number_input("Questions per batch", min_value=1, value=DEFAULT_QUESTION_COUNT)
     variants_per_source = st.sidebar.number_input("Variants per question", min_value=1, value=5)
     bundle = st.sidebar.checkbox("Bundle artefacts", value=True)
     extra_args = st.sidebar.text_input("Extra args (optional)", "")
@@ -177,6 +181,7 @@ def main() -> None:
         success = run_refresh_cycle(
             adapter_name=adapter_name,
             compare_with=compare_with,
+            question_count=int(question_count),
             variants_per_source=variants_per_source,
             bundle=bundle,
             extra_args=extra_args,

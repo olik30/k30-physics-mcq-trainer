@@ -19,7 +19,7 @@ Everything here can be done inside the **MCQ Variant Reviewer** Streamlit page�
 ---
 
 ## Step 1 — Review the five variants
-For each question row you see:
+Each cycle picks **five random question parts** from the whole past-paper dataset. For the group currently on screen:
 1. Read the five variants shown side-by-side.
 2. Choose a **Preferred variant** (`1–5`) or leave “None” if nothing stands out yet.
 3. For every variant, pick **Accept** or **Reject** and leave a short note (e.g. “Accept – hint mentions g correctly”, “Reject – explanation copies the question”).
@@ -36,7 +36,8 @@ Once you have a batch of decisions:
 2. Check the settings:
    - **Adapter name** — pick the label for the new training run (e.g. `adapter_v3`).
    - **Compare-with metrics** — usually the previous adapter’s metrics file.
-   - **Variants per question** — default is 5; lower it if you want fewer drafts.
+   - **Questions per batch** — default is 5 (change this if you want to review more or fewer questions next time).
+   - **Variants per question** — default is 5; lower it if you want fewer drafts per question.
    - **Bundle artefacts** — keep on if you want the hand-off bundle refreshed.
 3. Press **Generate new variants & retrain**.
 4. The centre panel streams live progress; when it finishes successfully the page refreshes with the newly generated variants ready for another pass.

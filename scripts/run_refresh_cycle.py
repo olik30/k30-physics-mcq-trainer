@@ -287,6 +287,17 @@ def determine_eval_dataset(args: argparse.Namespace) -> Path:
     return fallback
 
 
+def _filter_existing_paths(paths: List[str]) -> List[str]:
+    existing: List[str] = []
+    for path in paths:
+        if not path:
+            continue
+        path_obj = Path(path)
+        if path_obj.exists():
+            existing.append(str(path_obj))
+    return existing
+
+
 def compute_record_id(record: Dict[str, object]) -> str:
     question_id = ""
     part_code = ""
@@ -819,7 +830,9 @@ def run_refresh_cycle(args: argparse.Namespace) -> None:
             "config/adapters.yaml",
             str(adapter_dir),
         ]
-        bundle_paths = [path for path in default_paths if path] + args.bundle_paths
+        bundle_paths = _filter_existing_paths(default_paths) + [
+            path for path in args.bundle_paths if Path(path).exists()
+        ]
         bundle_args = ["--paths"] + bundle_paths
         create_handoff_bundle.main(bundle_args)
 

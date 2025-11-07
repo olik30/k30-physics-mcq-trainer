@@ -4,17 +4,19 @@ Everything here can be done inside the **MCQ Variant Reviewer** Streamlit page�
 
 ---
 
-## Step 0 — Install & launch (one-time setup)
-1. Open the project terminal and run:
-   ```powershell
-   pip install streamlit transformers datasets accelerate peft
-   pip install torch --index-url https://download.pytorch.org/whl/cpu
-   ```
-2. Start the reviewer UI:
-   ```powershell
-   streamlit run ui/variant_review.py
-   ```
-3. If the page says “No variant groups left”, click the sidebar button **Generate new variants & retrain** once to create a fresh batch.
+## Step 0 — One-time install & launch
+Run these commands in PowerShell (inside your virtualenv if you use one):
+
+```powershell
+pip uninstall -y torch torchvision torchaudio
+pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128
+pip install streamlit transformers datasets accelerate peft opencv-contrib-python
+python -c "import torch; print(torch.__version__); print(torch.version.cuda); print(torch.cuda.is_available()); print([torch.cuda.get_device_capability(i) for i in range(torch.cuda.device_count())])"
+streamlit run ui/variant_review.py
+```
+- The uninstall step keeps you from mixing the old CPU-only wheels with the new CUDA 12.8 nightly that supports RTX 50‑series cards.
+- The verification line should print something like `2.7.0.dev…`, `12.8`, `True`, and `[(18, 0)]`—that tells you PyTorch can see your GPU.
+- If the page says “No variant groups left”, click **Generate new variants & retrain** once to produce the first batch.
 
 ---
 
@@ -24,7 +26,7 @@ Each cycle picks **five random question parts** from the whole past-paper datase
 2. Choose a **Preferred variant** (`1–5`) or leave “None” if nothing stands out yet.
 3. For every variant, pick **Accept** or **Reject** and leave a short note (e.g. “Accept – hint mentions g correctly”, “Reject – explanation copies the question”).
 4. Click **Save decisions**.
-5. Move between questions with **Previous**, **Skip group**, or **Next (no save)**.
+5. Move between questions with **Previous**, **Skip group**, or **Next**.
 
 Your notes are saved automatically to the project log so the training script knows which variants to keep.
 

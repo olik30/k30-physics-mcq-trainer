@@ -1,62 +1,104 @@
-# Review → Retrain Loop Overview
+# Review → Retrain Cycle (Quick Guide)
 
-## Current Adapter Quality
-- Metrics from `results/adapter_v2/metrics.json`:
-  - `json_valid_pct`: **85.7 %** — adapter usually emits parseable JSON.
-  - `schema_valid_pct`: **75.5 %** — three quarters satisfy all required fields/length checks.
-  - `answer_match_pct`: **0.0 %** — it still picks the wrong option every time, so wording/structure is decent but physics correctness is missing.
+This page explains, in plain language, how to review MCQ drafts, pick the best ones, and retrain the model. Follow the steps in order.
 
-## Human Review Steps (Variant Phase)
-1. Queue five variants per question and pick the best ones:
-   ```powershell
-   python scripts/feedback_queue.py variants \
-     --input data/filtered/refresh_candidates.jsonl \
-     --log data/review/variant_choices.jsonl
-   ```
-   _Prefer a GUI?_ Launch the Streamlit app:
-   ```powershell
-   streamlit run ui/variant_review.py
-   ```
-   (Install once with `pip install streamlit`.)
-   - First choose the preferred variant (`1-5`, or `n` if none stand out).
-   - For every variant, answer `a` (accept) or `r` (reject) and leave a short note:
-     - Accepted-but-not-preferred notes should mention why it’s still good and why another variant wins.
-     - Rejected notes call out the flaw (e.g. “hint restates the question”, “explanation missing units”).
+---
 
-2. Retrain with the accepted variants:
-   ```powershell
-   python scripts/run_refresh_cycle.py \
-     --adapter-name adapter_v3 \
-     --compare-with results/adapter_v2/metrics.json \
-     --variants-per-source 5 \
-     --bundle
-   ```
-   - Accepted variants flow into `data/filtered/refresh_accept.jsonl` with preferred ones flagged and weighted heavier.
-   - Rejected/pending variants are archived in `data/filtered/refresh_reject.jsonl` for regeneration.
-   - Once wording quality is solid, switch back to `feedback_queue.py review …` to focus purely on answer correctness.
+## 1. One-Time Setup
 
-## What Happens During the Cycle
-- `prepare_refresh.py` selects weak samples (JSON/schema failures, answer mismatches) from the last evaluation and writes question parts to `data/parsed/refresh_sources.jsonl`.
-- `auto_generate.py` (with `--variants-per-source`) and `filter_balance.py` regenerate drafts and output `data/filtered/refresh_candidates.jsonl` containing all variants.
-- `feedback_queue.py variants` records decisions in `data/review/variant_choices.jsonl` and splits them into:
-  - `data/filtered/refresh_accept.jsonl` (accepted variants; preferred ones flagged via `metadata.review`).
-  - `data/filtered/refresh_reject.jsonl` (rejected or pending variants held for another regeneration pass).
-- `format_for_sft.py` merges `refresh_accept.jsonl` with the seed dataset and emits chat-tuned splits under `data/formatted/` + hashes in `data/formatted/manifest.json`.
-- `train_lora.py` writes the new adapter into `models/adapters/<adapter_name>/` (checkpoints, tokenizer, logs).
-- `eval.py` stores metrics/samples in `results/<adapter_name>/`.
-- Optional `compare_adapters.py` creates deltas in `results/adapter_comparison.{json,md}`.
-- If `--bundle` is set, `handoff/<day14_artifacts|...>/` is refreshed with everything reviewers need.
+Install the tools we use:
 
-## Output Locations
-- **MCQs awaiting review:** `data/filtered/refresh_candidates.jsonl`
-- **Accepted variants feeding the next train:** `data/filtered/refresh_accept.jsonl`
-- **Rejected / pending variants:** `data/filtered/refresh_reject.jsonl`
-- **Variant review log:** `data/review/variant_choices.jsonl`
-- **(Answer QA phase) Per-MCQ review log:** `data/review/day13_feedback_log.jsonl`
-- **Adapter checkpoints & training logs:** `models/adapters/<adapter_name>/`
-- **Evaluation reports:** `results/<adapter_name>/`
+```powershell
+pip install streamlit transformers datasets accelerate
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+```
 
-## Comment Guidance
-- **Variant phase:** focus on wording quality. Explain why a variant is accepted/rejected and, if it isn’t the preferred one, why another variant reads better.
-- **Answer QA phase:** keep notes concise (1–2 sentences) with the correct option letter and a short justification tied to the mark scheme.
+(The second command installs the CPU build of PyTorch so the training script can run anywhere.)
+
+---
+
+## 2. Generate Fresh Drafts (5 variants per question)
+
+```powershell
+python scripts/run_refresh_cycle.py --adapter-name adapter_v3 --compare-with results/adapter_v2/metrics.json --variants-per-source 5 --bundle
+```
+
+This creates:
+
+- `data/filtered/refresh_candidates.jsonl` – the 5 variants for each question.
+- `data/parsed/refresh_sources.jsonl` – the source question parts that were regenerated.
+- `reports/adapter_v3_refresh.*` – quick quality summaries.
+
+Run this command whenever you want a new batch to review. (It also performs a short training pass; increase `--max-steps` later for longer runs.)
+
+---
+
+## 3. Review the Variants
+
+### Option A – Command line
+
+```powershell
+python scripts/feedback_queue.py variants \
+  --input data/filtered/refresh_candidates.jsonl \
+  --log data/review/variant_choices.jsonl
+```
+
+You’ll see each question with five columns. For every group:
+
+1. Pick the **preferred** variant (`1-5`, or `n` if none stand out).
+2. For each variant, type `a` (accept) or `r` (reject) and add a short note.
+
+### Option B – Streamlit web app
+
+```powershell
+streamlit run ui/variant_review.py
+```
+
+This opens a simple browser page with buttons instead of typing. The app writes the same log file (`data/review/variant_choices.jsonl`).
+
+Your notes should call out what works (or doesn’t): e.g. “Accept – clear hint, numerical check matches mark scheme” or “Reject – explanation repeats question.”
+
+The log file records:
+
+- `refresh_accept.jsonl` – all variants marked “accept” (preferred ones are flagged).
+- `refresh_reject.jsonl` – variants marked “reject” or left undecided.
+
+---
+
+## 4. Retrain With Your Choices
+
+After you’ve reviewed enough questions, rerun the cycle (same command as step 2). The script will:
+
+1. Pull in your decisions from `data/review/variant_choices.jsonl`.
+2. Rebuild the training set using the accepted variants.
+3. Fine-tune the adapter and produce new evaluation metrics in `results/<adapter_name>/`.
+
+Repeat steps 2–4 as many times as needed until all five variants for each question are acceptable.
+
+---
+
+## 5. (Optional) Answer-Only Review Stage
+
+Once the wording/hints look good, switch to the original answer checker to fix incorrect answers:
+
+```powershell
+python scripts/feedback_queue.py review \
+  --input data/filtered/refresh_candidates.jsonl \
+  --log data/review/day13_feedback_log.jsonl
+```
+
+This prompt lets you mark each MCQ `approve` / `needs-work` / `reject`, confirm the correct option letter, and leave a short rationale.
+
+---
+
+### Where Files Live
+
+- `data/filtered/refresh_candidates.jsonl` – drafts waiting for review.
+- `data/review/variant_choices.jsonl` – your variant decisions.
+- `data/filtered/refresh_accept.jsonl` – variants that will train the next adapter.
+- `data/filtered/refresh_reject.jsonl` – variants to regenerate later.
+- `models/adapters/<adapter_name>/` – saved LoRA adapters.
+- `results/<adapter_name>/` – evaluation reports (metrics + sample outputs).
+
+Keep this cheat sheet handy and repeat the loop: **Generate → Review variants → Retrain → (Optional) Answer review**.
 

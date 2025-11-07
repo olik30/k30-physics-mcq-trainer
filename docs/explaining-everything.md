@@ -24,12 +24,14 @@ graph_human_descriptions/ – the human-written “gold” summaries we used for
 parsed/ – structured question files (question text, mark schemes, linked assets).
 index/ – a quick-lookup database built from the parsed questions.
 filtered/ – the cleaned MCQ drafts that passed Day 9 checks.
+eval/ – rotating evaluation decks (three 60-question cores plus the larger audit set).
 review/ – notes on what we approved/rejected during manual reviews.
 other_syllabuses/ – archived boards we’re not using right now, kept out of the AQA pipeline.
 
 Other top-level folders
 docs/ – all written guides, daily recaps, and workflow plans.
 artifacts/logs/ – run-by-run transcripts from scripts (extraction, OCR, training, etc.).
+artifacts/state/ – small JSON files that track things like which evaluation deck to use next.
 models/ – saved model files and adapter checkpoints.
 config/ – machine-readable notes about each adapter run (`config/adapters.yaml`).
 artifacts/results/ – evaluation metrics, dataset stats, and sample outputs.

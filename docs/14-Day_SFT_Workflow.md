@@ -118,12 +118,13 @@ NOTE: MARKDOWN PROGRESS + WHAT'S IMPLEMENENTED + DELIVERABLES WHEN YOU FINISH A 
 - Capture key performance traces (loss curves, throughput) so reviewers have immediate context once they log on after Day 14.
 - ✅ First smoke test completed: ran `python scripts/train_lora.py --base-model Qwen/Qwen2.5-0.5B-Instruct --device-map cpu --max-steps 1 --no-eval` to prove end-to-end wiring. Saved adapter weights under `models/adapters/adapter_v1/`, metrics to `artifacts/logs/train/adapter_v1.jsonl`, and catalogued the run in `config/adapters.yaml`. Full 7B training will resume once a CUDA build that recognises the RTX 5080 is installed.
 
-**Day 12 — Automated evaluation & surfacing weak spots**
-- Build a fixed 300-question evaluation deck once with `python scripts/build_eval_set.py --count 300`; it writes `data/eval/eval_set.jsonl` plus manifest/stats so every future run compares on the same ground truth.
-- Run `scripts/eval.py` on `data/eval/eval_set.jsonl` to compute JSON validity %, accuracy, distractor diversity, numeric tolerance, AO distribution alignment, and hint quality heuristics.
+- **Day 12 — Automated evaluation & surfacing weak spots**
+- Build the daily rotation decks with `python scripts/build_eval_set.py --count 60 --sets 3 --output-dir data/eval/core_sets` so we always have three 60-question subsets ready (keeps each retrain under ~10 minutes).
+- Also create the larger audit deck with `python scripts/build_eval_set.py --count 300 --output data/eval/eval_audit.jsonl --manifest data/eval/audit_manifest.json` for occasional deep dives.
+- Run `scripts/eval.py` on the chosen deck to compute JSON validity %, accuracy, distractor diversity, numeric tolerance, AO distribution alignment, and hint quality heuristics.
 - Save metrics to `artifacts/results/adapter_v1/metrics.json` and representative samples to `artifacts/results/adapter_v1/samples.jsonl`; generate CSV/HTML dashboards that can be opened by reviewers later.
 - Auto-tag items that fall below numeric or reasoning thresholds and queue them for further synthesis.
-- ✅ `python scripts/eval.py --dataset data/eval/eval_set.jsonl --trust-remote-code --device cuda` completed (≈6 min on the RTX 5080 using the 0.5B adapter). Metrics: JSON validity 83.7%, schema-valid 69.4%, numeric-clean 100%, but answer_match 0% and AO1/AO2 skew (AO2+AO3 missing). Samples logged to `artifacts/results/adapter_v1/samples.jsonl` for Day 13 triage.
+- ✅ `python scripts/eval.py --dataset data/eval/eval_audit.jsonl --trust-remote-code --device cuda` completed (≈6 min on the RTX 5080 using the 0.5B adapter). Metrics: JSON validity 83.7%, schema-valid 69.4%, numeric-clean 100%, but answer_match 0% and AO1/AO2 skew (AO2+AO3 missing). Samples logged to `artifacts/results/adapter_v1/samples.jsonl` for Day 13 triage.
 
 **Day 13 — Synthetic refresh & feedback tooling**
 - Use the evaluation tags to auto-select candidate questions for regeneration with `scripts/auto_generate.py`, passing them through the sanitise/filter chain into `data/filtered/refresh_candidates.jsonl`.

@@ -123,6 +123,12 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="Top-p nucleus sampling value",
     )
     parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=1,
+        help="Number of prompts to evaluate in parallel (default: 1)",
+    )
+    parser.add_argument(
         "--trust-remote-code",
         action="store_true",
         help="Allow custom model/tokenizer code",
@@ -223,29 +229,43 @@ def prepare_model(
     return peft_model
 
 
-def generate_response(
+def generate_batch_responses(
     model: AutoModelForCausalLM,
     tokenizer: AutoTokenizer,
-    prompt_messages: List[Dict[str, str]],
+    batch_prompts: List[List[Dict[str, str]]],
     generation_config: GenerationConfig,
     device: str,
-) -> Tuple[str, int, int]:
-    prompt_text = tokenizer.apply_chat_template(
-        prompt_messages,
-        tokenize=False,
-        add_generation_prompt=True,
-    )
-    inputs = tokenizer(prompt_text, return_tensors="pt").to(device)
+) -> List[Tuple[str, int, int]]:
+    if not batch_prompts:
+        return []
+
+    prompt_texts = [
+        tokenizer.apply_chat_template(
+            prompt_messages,
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+        for prompt_messages in batch_prompts
+    ]
+    inputs = tokenizer(prompt_texts, return_tensors="pt", padding=True).to(device)
+    attention_mask = inputs.get("attention_mask")
+    if attention_mask is None:
+        raise ValueError("Tokenizer must return attention_mask when padding=True")
+
     with torch.no_grad():
         output = model.generate(
             **inputs,
             generation_config=generation_config,
         )
-    generated_tokens = output[0][inputs["input_ids"].shape[1] :]
-    completion = tokenizer.decode(generated_tokens, skip_special_tokens=True).strip()
-    prompt_tokens = inputs["input_ids"].shape[1]
-    completion_tokens = generated_tokens.shape[0]
-    return completion, prompt_tokens, completion_tokens
+
+    input_lengths = attention_mask.sum(dim=1)
+    results: List[Tuple[str, int, int]] = []
+    for idx in range(len(prompt_texts)):
+        prompt_len = int(input_lengths[idx].item())
+        generated_tokens = output[idx][prompt_len:].detach().cpu()
+        completion = tokenizer.decode(generated_tokens, skip_special_tokens=True).strip()
+        results.append((completion, prompt_len, generated_tokens.shape[0]))
+    return results
 
 
 def evaluate_sample(
@@ -431,55 +451,72 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         pad_token_id=tokenizer.pad_token_id,
     )
 
+    batch_size = max(1, args.batch_size)
     samples: List[SampleResult] = []
     ao_reference_counter: Counter = Counter()
 
-    for record in tqdm(records, desc="Evaluating"):
-        record_id = record.get("id") or "unknown"
-        reference = parse_reference(record)
-        ao_reference_counter[reference.get("ao")] += 1
+    for start in tqdm(range(0, len(records), batch_size), desc="Evaluating"):
+        batch_records = records[start : start + batch_size]
+        if not batch_records:
+            continue
 
-        messages = record.get("messages") or []
-        prompt_messages = messages[:-1]
+        prompt_batches: List[List[Dict[str, str]]] = []
+        references: List[Dict[str, Any]] = []
+        record_ids: List[str] = []
 
-        generated_text, prompt_tokens, completion_tokens = generate_response(
+        for record in batch_records:
+            record_id = record.get("id") or "unknown"
+            reference = parse_reference(record)
+            ao_reference_counter[reference.get("ao")] += 1
+
+            messages = record.get("messages") or []
+            prompt_messages = messages[:-1]
+
+            prompt_batches.append(prompt_messages)
+            references.append(reference)
+            record_ids.append(record_id)
+
+        generated_batch = generate_batch_responses(
             model=model,
             tokenizer=tokenizer,
-            prompt_messages=prompt_messages,
+            batch_prompts=prompt_batches,
             generation_config=generation_config,
             device=device,
         )
 
-        parsed, parse_error = extract_json_payload(generated_text)
-        (
-            json_valid,
-            schema_valid,
-            answer_match,
-            unique_ratio,
-            numeric_ok,
-            hint_chars,
-            explanation_chars,
-            schema_errors,
-        ) = evaluate_sample(record, reference, parsed)
+        for (generated_text, prompt_tokens, completion_tokens), record, record_id, reference in zip(
+            generated_batch, batch_records, record_ids, references
+        ):
+            parsed, parse_error = extract_json_payload(generated_text)
+            (
+                json_valid,
+                schema_valid,
+                answer_match,
+                unique_ratio,
+                numeric_ok,
+                hint_chars,
+                explanation_chars,
+                schema_errors,
+            ) = evaluate_sample(record, reference, parsed)
 
-        sample = SampleResult(
-            record_id=record_id,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            raw_output=generated_text,
-            parsed=parsed,
-            parse_error=parse_error,
-            schema_errors=schema_errors,
-            reference=reference,
-            json_valid=json_valid,
-            schema_valid=schema_valid,
-            answer_match=answer_match,
-            distractor_unique_ratio=unique_ratio,
-            numeric_ok=numeric_ok,
-            hint_chars=hint_chars,
-            explanation_chars=explanation_chars,
-        )
-        samples.append(sample)
+            sample = SampleResult(
+                record_id=record_id,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                raw_output=generated_text,
+                parsed=parsed,
+                parse_error=parse_error,
+                schema_errors=schema_errors,
+                reference=reference,
+                json_valid=json_valid,
+                schema_valid=schema_valid,
+                answer_match=answer_match,
+                distractor_unique_ratio=unique_ratio,
+                numeric_ok=numeric_ok,
+                hint_chars=hint_chars,
+                explanation_chars=explanation_chars,
+            )
+            samples.append(sample)
 
     metrics = aggregate_metrics(samples, ao_reference_counter)
 

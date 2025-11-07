@@ -18,3 +18,10 @@ data/index/
 logs/
 data/review/
 artifacts/
+
+# Generated refresh/evaluation outputs
+data/eval/
+data/filtered/refresh_accept.jsonl
+data/filtered/refresh_reject.jsonl
+models/adapters/adapter_v3/
+models/adapters/adapter_v4/

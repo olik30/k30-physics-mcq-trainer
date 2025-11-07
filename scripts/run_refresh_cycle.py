@@ -45,7 +45,10 @@ DEFAULT_VARIANT_LOG = Path("data/review/variant_choices.jsonl")
 DEFAULT_FEEDBACK_LOG = Path("data/review/day13_feedback_log.jsonl")
 DEFAULT_SEED_DATA = Path("data/filtered/seed_train.filtered.jsonl")
 DEFAULT_SOURCE_DATASET = Path("data/parsed/questions.jsonl")
-DEFAULT_EVAL_DATASET = Path("data/eval/eval_core.jsonl")
+DEFAULT_EVAL_DATASET = None
+DEFAULT_EVAL_SET_DIR = Path("data/eval/core_sets")
+DEFAULT_EVAL_STATE = Path("artifacts/state/eval_rotation.json")
+FALLBACK_EVAL_DATASET = Path("data/formatted/test.jsonl")
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -190,7 +193,98 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         default=DEFAULT_EVAL_DATASET,
         help="Chat-formatted dataset to use for evaluation (falls back to formatted test split if missing)",
     )
+    parser.add_argument(
+        "--evaluation-set-dir",
+        type=Path,
+        default=DEFAULT_EVAL_SET_DIR,
+        help="Directory containing multiple evaluation sets for rotation",
+    )
+    parser.add_argument(
+        "--evaluation-state",
+        type=Path,
+        default=DEFAULT_EVAL_STATE,
+        help="State file tracking which evaluation set was used last",
+    )
+    parser.add_argument(
+        "--eval-batch-size",
+        type=int,
+        default=4,
+        help="Batch size to use when running eval.py (default: 4)",
+    )
+    parser.add_argument(
+        "--eval-max-new-tokens",
+        type=int,
+        default=192,
+        help="Maximum tokens to generate for each evaluation response (default: 192)",
+    )
+    parser.add_argument(
+        "--eval-temperature",
+        type=float,
+        default=0.0,
+        help="Sampling temperature for evaluation generation (default: 0 for greedy)",
+    )
     return parser.parse_args(argv)
+
+
+def _normalise_dataset_path(value: Optional[Path]) -> Optional[Path]:
+    if value is None:
+        return None
+    return Path(value)
+
+
+def rotate_eval_dataset(set_dir: Optional[Path], state_path: Path) -> Optional[Path]:
+    directory = set_dir or DEFAULT_EVAL_SET_DIR
+    if directory is None:
+        return None
+    if not directory.exists():
+        return None
+
+    available = sorted(path.resolve() for path in directory.glob("*.jsonl"))
+    if not available:
+        return None
+
+    state: Dict[str, Any] = {}
+    if state_path.exists():
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            state = {}
+
+    available_str = [str(path) for path in available]
+    stored_order = state.get("order")
+    stored_index = state.get("index", -1)
+
+    if isinstance(stored_order, list) and set(stored_order) == set(available_str):
+        order = stored_order
+        index = stored_index if isinstance(stored_index, int) else -1
+    else:
+        order = available_str
+        index = -1
+
+    next_index = (index + 1) % len(order)
+    selected = Path(order[next_index])
+
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(json.dumps({"order": order, "index": next_index}, indent=2), encoding="utf-8")
+    return selected
+
+
+def determine_eval_dataset(args: argparse.Namespace) -> Path:
+    explicit = _normalise_dataset_path(args.evaluation_dataset)
+    if explicit:
+        if explicit.exists():
+            print(f"Using evaluation dataset specified via CLI: {explicit}")
+            return explicit
+        print(f"Warning: evaluation dataset {explicit} not found; falling back to rotation or default.")
+
+    rotated = rotate_eval_dataset(args.evaluation_set_dir, args.evaluation_state)
+    if rotated and rotated.exists():
+        print(f"Using rotated evaluation dataset: {rotated}")
+        return rotated
+
+    fallback = FALLBACK_EVAL_DATASET
+    print(f"Evaluation dataset not found; falling back to {fallback}")
+    return fallback
 
 
 def compute_record_id(record: Dict[str, object]) -> str:
@@ -669,13 +763,7 @@ def run_refresh_cycle(args: argparse.Namespace) -> None:
 
     print("Step 7/8: eval.py")
     eval_output = Path("artifacts/results") / args.adapter_name
-    eval_dataset = args.evaluation_dataset
-    if not eval_dataset.exists():
-        fallback_dataset = Path("data/formatted/test.jsonl")
-        print(
-            f"Evaluation dataset {eval_dataset} not found; falling back to {fallback_dataset}",
-        )
-        eval_dataset = fallback_dataset
+    eval_dataset = determine_eval_dataset(args)
     eval_args = [
         "--trust-remote-code",
         "--dataset",
@@ -687,9 +775,11 @@ def run_refresh_cycle(args: argparse.Namespace) -> None:
         "--output-dir",
         str(eval_output),
         "--max-new-tokens",
-        "256",
+        str(args.eval_max_new_tokens),
         "--temperature",
-        "0",
+        str(args.eval_temperature),
+        "--batch-size",
+        str(max(1, args.eval_batch_size)),
     ]
     eval.main(eval_args)
 

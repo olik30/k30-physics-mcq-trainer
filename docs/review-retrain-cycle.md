@@ -45,6 +45,7 @@ Once you have a batch of decisions:
 4. The centre panel streams live progress; when it finishes successfully the page refreshes with the newly generated variants ready for another pass.
 
 Each retrain reuses your accepted variants and regenerates new drafts for anything you rejected or skipped.
+Under the hood the evaluation step rotates through three 60-question decks (`core_01`–`core_03` under `data/eval/core_sets/`), keeping the full cycle comfortably under 10 minutes. The current deck is tracked in `artifacts/state/eval_rotation.json`, so every run automatically picks the next set.
 
 ---
 
@@ -64,7 +65,7 @@ When the wording and hints look right, switch to the “Answer Review” tab ins
 - `data/review/variant_choices.jsonl` stores every decision you make.
 - `data/filtered/refresh_accept.jsonl` keeps the variants you approved (preferred ones are weighted more).
 - `data/filtered/refresh_reject.jsonl` holds the variants you rejected or skipped so they can be regenerated next round.
-- `data/eval/eval_set.jsonl` is the fixed 300-question evaluation deck every run uses for comparable metrics.
+- `data/eval/core_sets/` stores the rotating 60-question evaluation decks used for day-to-day runs; refresh them with `python scripts/build_eval_set.py --count 60 --sets 3`.
 - `models/adapters/<name>/` and `artifacts/results/<name>/` contain the newly trained adapter and its evaluation reports.
 
 That’s all—work entirely inside the reviewer: review the variants, press the sidebar button, and the system takes care of the rest.

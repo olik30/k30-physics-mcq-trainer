@@ -28,6 +28,8 @@ DEFAULT_INPUTS = [
     Path("data/filtered/refresh_accept.jsonl"),
 ]
 
+DEFAULT_MULTI_OUTPUT_DIR = Path("data/eval/core_sets")
+
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build a stable evaluation dataset")
@@ -67,6 +69,24 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         type=Path,
         default=Path("data/eval/stats.json"),
         help="Optional path to write distribution stats",
+    )
+    parser.add_argument(
+        "--sets",
+        type=int,
+        default=1,
+        help="Number of independent evaluation subsets to create (default: 1)",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Directory for multi-set output (defaults to data/eval/core_sets when --sets > 1)",
+    )
+    parser.add_argument(
+        "--label-prefix",
+        type=str,
+        default="core",
+        help="Filename prefix for multi-set outputs (e.g., core_01.jsonl)",
     )
     return parser.parse_args(argv)
 
@@ -170,33 +190,80 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         f" {skipped['duplicate_id']} duplicates)."
     )
 
-    selection = _stratified_sample(clean_records, args.count if args.count else len(clean_records), args.seed)
-    print(f"Selected {len(selection)} records for evaluation deck (target {args.count}).")
+    if args.sets <= 1:
+        selection = _stratified_sample(clean_records, args.count if args.count else len(clean_records), args.seed)
+        print(f"Selected {len(selection)} records for evaluation deck (target {args.count}).")
 
-    conversations = format_for_sft.convert_to_conversations(selection)
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    sha256 = format_for_sft.write_jsonl(args.output, conversations)
-    print(f"Wrote evaluation set to {args.output} (sha256 {sha256})")
+        conversations = format_for_sft.convert_to_conversations(selection)
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        sha256 = format_for_sft.write_jsonl(args.output, conversations)
+        print(f"Wrote evaluation set to {args.output} (sha256 {sha256})")
 
-    stats = format_for_sft.compute_stats("eval", conversations)
-    stats.update({"seed": args.seed, "source_files": [str(p) for p in args.inputs]})
-    if args.stats_path:
-        args.stats_path.parent.mkdir(parents=True, exist_ok=True)
-        args.stats_path.write_text(json.dumps(stats, indent=2), encoding="utf-8")
+        stats = format_for_sft.compute_stats("eval", conversations)
+        stats.update({"seed": args.seed, "source_files": [str(p) for p in args.inputs]})
+        if args.stats_path:
+            args.stats_path.parent.mkdir(parents=True, exist_ok=True)
+            args.stats_path.write_text(json.dumps(stats, indent=2), encoding="utf-8")
 
-    manifest = {
-        "output": str(args.output),
-        "sha256": sha256,
-        "count": len(conversations),
-        "seed": args.seed,
-        "source_files": [str(p) for p in args.inputs],
+        manifest = {
+            "output": str(args.output),
+            "sha256": sha256,
+            "count": len(conversations),
+            "seed": args.seed,
+            "source_files": [str(p) for p in args.inputs],
+            "requested_count": args.count,
+            "skipped": dict(skipped),
+            "stats_path": str(args.stats_path),
+        }
+        args.manifest.parent.mkdir(parents=True, exist_ok=True)
+        args.manifest.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+        print(f"Manifest written to {args.manifest}")
+        return
+
+    output_dir = args.output_dir or DEFAULT_MULTI_OUTPUT_DIR
+    output_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Generating {args.sets} evaluation sets in {output_dir}")
+
+    aggregate_manifest: Dict[str, Any] = {
+        "sets": [],
+        "seed_base": args.seed,
         "requested_count": args.count,
+        "source_files": [str(p) for p in args.inputs],
         "skipped": dict(skipped),
-        "stats_path": str(args.stats_path),
     }
-    args.manifest.parent.mkdir(parents=True, exist_ok=True)
-    args.manifest.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-    print(f"Manifest written to {args.manifest}")
+
+    for idx in range(args.sets):
+        subset_seed = args.seed + idx
+        target_count = args.count if args.count else len(clean_records)
+        if target_count > len(clean_records):
+            target_count = len(clean_records)
+        subset = _stratified_sample(clean_records, target_count, subset_seed)
+        label = f"{args.label_prefix}_{idx + 1:02d}"
+        output_path = output_dir / f"{label}.jsonl"
+        stats_path = output_dir / f"{label}_stats.json"
+
+        print(f"Set {idx + 1}/{args.sets}: selected {len(subset)} records (target {target_count}).")
+        conversations = format_for_sft.convert_to_conversations(subset)
+        sha256 = format_for_sft.write_jsonl(output_path, conversations)
+        print(f"  Wrote evaluation set to {output_path} (sha256 {sha256})")
+
+        stats = format_for_sft.compute_stats(label, conversations)
+        stats.update({"seed": subset_seed, "source_files": [str(p) for p in args.inputs]})
+        stats_path.write_text(json.dumps(stats, indent=2), encoding="utf-8")
+
+        entry = {
+            "label": label,
+            "path": str(output_path),
+            "sha256": sha256,
+            "count": len(conversations),
+            "seed": subset_seed,
+            "stats_path": str(stats_path),
+        }
+        aggregate_manifest["sets"].append(entry)
+
+    manifest_path = output_dir / "manifest.json"
+    manifest_path.write_text(json.dumps(aggregate_manifest, indent=2), encoding="utf-8")
+    print(f"Multi-set manifest written to {manifest_path}")
 
 
 if __name__ == "__main__":

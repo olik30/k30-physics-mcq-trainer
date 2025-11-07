@@ -80,6 +80,7 @@ Day 10 recap:
 - Wrote `scripts/format_for_sft.py` so the filtered MCQs become OpenAI-style conversations (system prompt + user prompt + strict JSON answer) ready for fine-tuning.
 - Ran it across the seed + auto-clean sets to generate `data/formatted/train.jsonl` (383 items), `val.jsonl` (47), and `test.jsonl` (49), with hashes captured in `data/formatted/manifest.json`.
 - Logged aggregate stats (AO/topic/difficulty splits per split) to `artifacts/results/dataset_stats.json` for easier tracking of coverage skew.
+- Generated rotating evaluation decks (`data/eval/core_sets/core_01-03.jsonl`) plus state tracking in `artifacts/state/eval_rotation.json` so daily refresh loops stay under the 10-minute target.
 - Confirmed the whole export stays deterministic with seed=42, so we can rebuild identical splits whenever the cleaned dataset changes.
 
 Day 11 recap:

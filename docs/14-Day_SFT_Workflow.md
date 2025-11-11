@@ -138,8 +138,8 @@ NOTE: MARKDOWN PROGRESS + WHAT'S IMPLEMENENTED + DELIVERABLES WHEN YOU FINISH A 
 - Run a second LoRA pass (`models/adapters/adapter_v2/`) to compare against adapter_v1, storing metrics in `artifacts/results/adapter_comparison.json` and rendering charts in `artifacts/results/adapter_comparison.md`.
 - Pre-populate the feedback tooling with the latest metrics, sample outputs, and flagged items; generate a consolidated `artifacts/handoff/day14_artifacts/` bundle containing datasets, adapters, evaluation dashboards, and a ready-to-use review queue.
 - Confirm all automation scripts can run unattended (cron/batch) so the human team only needs to open the feedback tool, review MCQs, and submit decisions post-Day 14.
-- Trained `adapter_v2` (`python scripts/train_lora.py ... --adapter-name adapter_v2 --device-map cpu`) and evaluated it with `scripts/eval.py` → outputs in `artifacts/results/adapter_v2/`.
-- Ran `python scripts/compare_adapters.py` to produce `artifacts/results/adapter_comparison.{json,md}` (adapter_v2 nudges JSON-valid to 85.7% and schema-valid to 75.5%, but answer-match remains 0%).
+- Trained `adapter_v1` (`python scripts/train_lora.py ... --adapter-name adapter_v1 --device-map cpu`) and evaluated it with `scripts/eval.py` → outputs in `artifacts/results/adapter_v1/`.
+- Ran `python scripts/compare_adapters.py` to produce `artifacts/results/adapter_comparison.{json,md}` (adapter_v1 nudges JSON-valid to 85.7% and schema-valid to 75.5%, but answer-match remains 0%).
 - Assembled `artifacts/handoff/day14_artifacts/` via `scripts/create_handoff_bundle.py`, bundling adapters, metrics, refresh candidates, feedback log, and the reviewer playbook with a manifest/README for the QA team.
 
 - **Post-Day 14 — Human QA & iterative improvement (starts after automation ends)**
@@ -150,7 +150,7 @@ NOTE: MARKDOWN PROGRESS + WHAT'S IMPLEMENENTED + DELIVERABLES WHEN YOU FINISH A 
 - Repeat the generate → filter → review → retrain loop as often as needed—the tooling handles retraining once you’re done reviewing.
 - Shortcut commands:
   - `python scripts/feedback_queue.py variants --input data/filtered/refresh_candidates.jsonl --log data/review/variant_choices.jsonl`
-  - `python scripts/run_refresh_cycle.py --adapter-name adapter_v3 --compare-with artifacts/results/adapter_v2/metrics.json --variants-per-source 5 --bundle`
+  - `python scripts/run_refresh_cycle.py --adapter-name adapter_v2 --compare-with artifacts/results/adapter_v1/metrics.json --variants-per-source 5 --bundle`
 
 ---
 

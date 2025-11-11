@@ -36,7 +36,7 @@ Your notes are saved automatically to the project log so the training script kno
 Once you have a batch of decisions:
 1. Open the sidebar (tap the “>” chevron if it’s hidden).
 2. Check the settings:
-   - **Adapter name** — pick the label for the new training run (e.g. `adapter_v3`).
+   - **Adapter name** — pick the label for the new training run (e.g. `adapter_v1`).
    - **Compare-with metrics** — usually the previous adapter’s metrics file.
    - **Questions per batch** — default is 5 (change this if you want to review more or fewer questions next time).
    - **Variants per question** — default is 5; lower it if you want fewer drafts per question.

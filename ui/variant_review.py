@@ -13,8 +13,8 @@ import streamlit as st
 
 DEFAULT_DATASET = Path("data/filtered/refresh_candidates.jsonl")
 DEFAULT_LOG = Path("data/review/variant_choices.jsonl")
-DEFAULT_ADAPTER = "adapter_v3"
-DEFAULT_COMPARE = "artifacts/results/adapter_v2/metrics.json"
+DEFAULT_ADAPTER = "adapter_v1"
+DEFAULT_COMPARE = "artifacts/results/adapter_v1/metrics.json"
 DEFAULT_QUESTION_COUNT = 5
 
 

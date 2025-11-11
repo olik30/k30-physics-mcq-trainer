@@ -80,8 +80,8 @@ Once you’ve logged enough feedback, run the end-to-end automation:
 
 ```bash
 python scripts/run_refresh_cycle.py \
-  --adapter-name adapter_v3 \
-  --compare-with artifacts/results/adapter_v2/metrics.json \
+  --adapter-name adapter_v2 \
+  --compare-with artifacts/results/adapter_v1/metrics.json \
   --variants-per-source 5 \
   --bundle
 ```

@@ -134,7 +134,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--adapter-name",
         required=True,
-        help="Name for the new adapter (e.g. adapter_v3)",
+        help="Name for the new adapter (e.g. adapter_v1)",
     )
     parser.add_argument(
         "--device-map",

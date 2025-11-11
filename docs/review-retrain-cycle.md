@@ -7,6 +7,45 @@ Everything here can be done inside the **MCQ Variant Reviewer** Streamlit page�
 ## Step 0 — One-time install & launch
 Run these commands in PowerShell (inside your virtualenv if you use one):
 
+# One-time setup on a new machine
+git config --global user.name "Your Name"
+git config --global user.email "your-email@example.com"
+git lfs install
+
+# Generate a new SSH keypair (press Enter to accept defaults)
+ssh-keygen -t ed25519 -C "their-email@example.com"
+
+# Generate a new SSH keypair (press Enter to accept defaults)
+ssh-keygen -t ed25519 -C "their-email@example.com"
+
+# Start the SSH agent and load the key
+Start-Service ssh-agent
+ssh-add $env:USERPROFILE\.ssh\id_ed25519
+
+# Print the public key so they can copy it into GitHub → Settings → SSH and GPG keys
+Get-Content $env:USERPROFILE\.ssh\id_ed25519.pub
+
+# Clone the repo
+git clone git@github.com:olik30/k30-physics-mcq-trainer.git
+cd k30-physics-mcq-trainer
+git lfs pull
+
+# Update local main just in case
+git checkout main
+git pull origin main
+
+# Create and switch to a new branch
+git checkout -b branch-name
+
+# Stage everything, including any updated LFS files
+git add -A
+
+# Commit with a clear message
+git commit -m "Describe the change"
+
+# Push the new branch upstream (first push needs --set-upstream or -u)
+git push -u origin branch-name
+
 ```powershell
 pip uninstall -y torch torchvision torchaudio
 pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128
